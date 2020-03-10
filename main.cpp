@@ -17,7 +17,7 @@ void error_exit()
     exit(1);
 }
 
-std::tuple<SDL_Window *, SDL_Surface *> sdl_setup()
+std::pair<SDL_Window *, SDL_Surface *> sdl_setup()
 {
     if (SDL_Init(SDL_INIT_EVERYTHING) != 0) error_exit();
     SDL_Window *window = SDL_CreateWindow("Chip8 Emulator",
