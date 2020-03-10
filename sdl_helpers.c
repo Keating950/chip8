@@ -5,8 +5,8 @@
 
 void sdl_error_exit()
 {
-    std::cerr << "Error: ";
-    std::cerr << SDL_GetError() << std::endl;
+    printf("Error: ");
+    printf("%s\n", SDL_GetError());
     SDL_Quit();
     exit(1);
 }
