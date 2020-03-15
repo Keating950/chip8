@@ -1,0 +1,17 @@
+[
+  {
+    "directory": "/home/bigfoot-lives/cProjects/cppProjects/chip8/bin",
+    "command": "/usr/bin/clang  -isystem /usr/include/SDL2    -o CMakeFiles/chip8.dir/main.c.o   -c /home/bigfoot-lives/cProjects/cppProjects/chip8/main.c",
+    "file": "/home/bigfoot-lives/cProjects/cppProjects/chip8/main.c"
+  },
+  {
+    "directory": "/home/bigfoot-lives/cProjects/cppProjects/chip8/bin",
+    "command": "/usr/bin/clang  -isystem /usr/include/SDL2    -o CMakeFiles/chip8.dir/sdl_helpers.c.o   -c /home/bigfoot-lives/cProjects/cppProjects/chip8/sdl_helpers.c",
+    "file": "/home/bigfoot-lives/cProjects/cppProjects/chip8/sdl_helpers.c"
+  },
+  {
+    "directory": "/home/bigfoot-lives/cProjects/cppProjects/chip8/bin",
+    "command": "/usr/bin/clang  -isystem /usr/include/SDL2    -o CMakeFiles/chip8.dir/chip8.c.o   -c /home/bigfoot-lives/cProjects/cppProjects/chip8/chip8.c",
+    "file": "/home/bigfoot-lives/cProjects/cppProjects/chip8/chip8.c"
+  }
+]
