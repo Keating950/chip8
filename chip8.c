@@ -15,6 +15,8 @@
   } while (0)
 // clang-format on
 #define UINT8_MAX 0xFF
+#define execute_opcode(vm, opcode)                                             \
+	function_table[compute_hash(opcode & 0x00F)](vm, opcode);
 
 chip8_vm initialize_chip8()
 {
@@ -32,7 +34,7 @@ chip8_vm initialize_chip8()
 		.delay_timer = 0,
 		.sound_timer = 0,
 		.keyboard = { false },
-		.draw_flag = false,
+		.draw_instruction = 0,
 	};
 	return vm;
 }

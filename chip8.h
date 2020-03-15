@@ -15,7 +15,7 @@ typedef struct CHIP8_VM_T {
 	unsigned char delay_timer; // delay register; should be 60hz
 	unsigned char sound_timer; // same as above
 	bool keyboard[0x10]; // hex keyboard - better as some kind of enum?
-	bool draw_flag;
+	unsigned short draw_instruction;
 } chip8_vm;
 
 chip8_vm initialize_chip8();

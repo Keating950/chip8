@@ -14,5 +14,5 @@ include_directories(${SDL2_INCLUDE_DIRS})
 pkg_search_module(SDL2IMAGE REQUIRED SDL2_image)
 include_directories(${SDL2IMAGE_INCLUDE_DIRS})
 
-add_executable(chip8 main.c sdl_helpers.c sdl_helpers.h chip8.c chip8.h)
+add_executable(chip8 main.c sdl_helpers.c sdl_helpers.h chip8.c chip8.h opcode_table.c opcode_table.h)
 target_link_libraries(chip8 PRIVATE SDL2::SDL2 ${SDL2IMAGE_LIBRARIES})
