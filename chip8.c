@@ -14,7 +14,7 @@
     exit(EXIT_FAILURE);   \
   } while (0)
 // clang-format on
-#define UINT8_MAX
+#define UINT8_MAX 0xFF
 
 chip8_vm initialize_chip8()
 {
@@ -26,7 +26,7 @@ chip8_vm initialize_chip8()
 		.v = { 0 },
 		.index_reg = 0,
 		.pc = 0,
-		.stack = { -1, { 0 } },
+		.stack = { 0 },
 		.sp = 0,
 		.screen = { 0 },
 		.delay_timer = 0,
@@ -39,26 +39,25 @@ chip8_vm initialize_chip8()
 
 void stack_push(unsigned short val, chip8_vm *vm)
 {
-	chip8_stack *stack = &vm->stack;
-	if (stack->head < 48)
-		stack->contents[stack->head++] = val;
+	if (vm->sp < 16)
+		vm->stack[vm->sp++] = val;
 	else
-		handle_error("ERROR: Attempted push to full VM Stack\n");
+		handle_error("Attempted push to full VM Stack\n");
 }
 
-unsigned short stack_pop(chip8_stack *stack)
+unsigned short stack_pop(chip8_vm *vm)
 {
-	if (stack->head >= 0)
-		return stack->contents[stack->head--];
+	if (vm->sp > 0)
+		return vm->stack[--vm->sp];
 	else
-		handle_error("ERROR: Attempted pop from empty VM Stack\n");
+		handle_error("Attempted pop from empty VM Stack\n");
 }
 
-unsigned short stack_peep(chip8_stack *stack)
+unsigned short *stack_peep(chip8_vm *vm)
 {
-	if (stack->head >= 0)
-		return stack->contents[stack->head];
-	return -1;
+	if (vm->sp > 0)
+		return &(vm->stack[(vm->sp) - 1]);
+	return NULL;
 }
 
 void load_rom(const char *path, chip8_vm *vm)
@@ -67,7 +66,7 @@ void load_rom(const char *path, chip8_vm *vm)
 	struct stat sb;
 	fd = open(path, O_RDONLY);
 	if (fd == -1)
-		handle_error("Error opening rom\n");
+		handle_error("fd was -1 after opening rom\n");
 	if (fstat(fd, &sb) == -1) /* To obtain file size */
 		handle_error("fstat error loading ROM\n");
 	if (sb.st_size > 0x800)
@@ -91,7 +90,7 @@ unsigned short vm_cycle(chip8_vm *vm)
 			break;
 		case 0x000E:
 			// jr $ra
-			vm->pc = stack_pop(&vm->stack);
+			vm->pc = stack_pop(vm);
 			break;
 		default:
 			// deprecated instruction
@@ -138,25 +137,57 @@ unsigned short vm_cycle(chip8_vm *vm)
 			vm->pc += 2;
 			break;
 		case 0x1:
-			vm->v[opcode & 0x0F00] =
-				vm->v[opcode & 0x0F00] | vm->v[opcode & 0x00F0];
+			// or
+			vm->v[opcode & 0x0F00] = vm->v[opcode & 0x0F00]
+						 | vm->v[opcode & 0x00F0];
 			vm->pc += 2;
 			break;
 		case 0x2:
-			vm->v[opcode & 0x0F00] =
-				vm->v[opcode & 0x0F00] & vm->v[opcode & 0x00F0];
+			// and
+			vm->v[opcode & 0x0F00] = vm->v[opcode & 0x0F00]
+						 & vm->v[opcode & 0x00F0];
 			vm->pc += 2;
 			break;
 		case 0x3:
-			vm->v[opcode & 0x0F00] =
-				vm->v[opcode & 0x0F00] ^ vm->v[opcode & 0x00F0];
+			// xor
+			vm->v[opcode & 0x0F00] = vm->v[opcode & 0x0F00]
+						 ^ vm->v[opcode & 0x00F0];
 			vm->pc += 2;
 			break;
 		case 0x4:
-			short sum =
-				vm->[opcode & 0x0F00] + vm->[opcode & 0x00F0];
-			if (sum > UINT8_MAX)
-				vm->
+			// carry-aware add
+			vm->v[0xF] = (vm->v[opcode & 0x0F00]
+					      + vm->v[opcode & 0x00F0]
+				      > UINT8_MAX);
+			vm->v[opcode & 0x0F00] = (vm->v[opcode & 0x0F00]
+						  + vm->v[opcode & 0x00F0])
+						 & 0x00F;
+			vm->pc += 2;
+			break;
+		case 0x5:
+			// borrow-aware sub (n.b. VF set to !borrow)
+			vm->v[0xF] = vm->v[opcode & 0x0F00]
+				     <= vm->v[opcode & 0x00F0];
+			vm->v[opcode & 0x0F00] -= vm->v[opcode & 0x00F0];
+			vm->pc += 2;
+			break;
+		case 0x6:
+			// euclidean division by two; set VF if remainder
+			// i.e. arithmetic right shift
+			vm->v[0xF] = vm->v[opcode & 0x0F00] & 1;
+			vm->v[opcode & 0x0F00] >>= 1;
+		case 0x7:
+			// same as 0x5, but Vy-Vx instead of Vx-Vy
+			vm->v[0xF] = vm->v[opcode & 0x0F00]
+				     >= vm->v[opcode & 0x00F0];
+			vm->v[opcode & 0x00F0] -= vm->v[opcode & 0x0F00];
+			vm->pc += 2;
+			break;
+		case 0xE:
+			// multiplication by two; set VF if remainder
+			// i.e. arithmetic left shift
+			vm->v[0xF] = vm->v[opcode & 0x0F00] & 1;
+			vm->v[opcode & 0x0F00] <<= 1;
 		}
 	case 0xA000:
 		// set index to val
