@@ -14,6 +14,7 @@
     exit(EXIT_FAILURE);   \
   } while (0)
 // clang-format on
+#define UINT8_MAX
 
 chip8_vm initialize_chip8()
 {
@@ -81,53 +82,82 @@ unsigned short vm_cycle(chip8_vm *vm)
 	unsigned short external_action = 0;
 
 	switch (opcode & 0xF000) {
-	case 0x0000:
-		// deprecated instruction
-		vm->pc += 2;
-		break;
-	case 0x00E0:
-		// clear screen
-		external_action = 0x00E0;
-		vm->pc += 2;
-		break;
-	case 0x00EE:
-		// jr $ra
-		vm->pc = stack_pop(&vm->stack);
-		break;
-	case 0x1000:
+	case 0x0:
+		switch (opcode & 0x000F) {
+		case 0x0000:
+			// clear screen
+			external_action = 0x00E0;
+			vm->pc += 2;
+			break;
+		case 0x000E:
+			// jr $ra
+			vm->pc = stack_pop(&vm->stack);
+			break;
+		default:
+			// deprecated instruction
+			vm->pc += 2;
+			break;
+		}
+	case 0x1:
 		// jump (don't store pc)
 		vm->pc = opcode & 0xFFF;
 		break;
-	case 0x2000:
+	case 0x2:
 		// call subroutine (store pc)
 		stack_push(vm->pc, vm);
 		vm->pc = opcode & 0xFFF;
 		break;
-	case 0x3000:
+	case 0x3:
 		// skip next instruction if reg==00NN
 		vm->pc += vm->v[opcode & 0x0F00] == (opcode & 0x00FF) ? 4 : 2;
 		break;
-	case 0x4000:
+	case 0x4:
 		// skip next instruction if reg!=00NN
 		vm->pc += vm->v[opcode & 0x0F00] != (opcode & 0x00FF) ? 4 : 2;
 		break;
-	case 0x5000:
+	case 0x5:
 		// skip next instruction if Vx==Vy
 		vm->pc += vm->v[opcode & 0x0F00] == vm->v[opcode & 0x00F0] ? 4 :
 									     2;
 		break;
-	case 0x6000:
+	case 0x6:
 		// set Vx to 00NN
 		vm->v[opcode & 0x0F00] = opcode & 0x00FF;
+		vm->pc += 2;
 		break;
-	case 0x7000:
-		// add 00NN to Vx
+	case 0x7:
+		// add 00NN to Vx without affecting carry.
 		vm->v[opcode & 0x0F00] += opcode & 0x00FF;
+		vm->pc += 2;
 		break;
-	case 0x8000:
-		// set Vx=Vy
-		vm->v[opcode & 0x0F00] = vm->v[opcode & 0x00F0];
-		break;
+	case 0x8:
+		switch (opcode & 0x000F) {
+		case 0x0:
+			// set Vx=Vy
+			vm->v[opcode & 0x0F00] = vm->v[opcode & 0x00F0];
+			vm->pc += 2;
+			break;
+		case 0x1:
+			vm->v[opcode & 0x0F00] =
+				vm->v[opcode & 0x0F00] | vm->v[opcode & 0x00F0];
+			vm->pc += 2;
+			break;
+		case 0x2:
+			vm->v[opcode & 0x0F00] =
+				vm->v[opcode & 0x0F00] & vm->v[opcode & 0x00F0];
+			vm->pc += 2;
+			break;
+		case 0x3:
+			vm->v[opcode & 0x0F00] =
+				vm->v[opcode & 0x0F00] ^ vm->v[opcode & 0x00F0];
+			vm->pc += 2;
+			break;
+		case 0x4:
+			short sum =
+				vm->[opcode & 0x0F00] + vm->[opcode & 0x00F0];
+			if (sum > UINT8_MAX)
+				vm->
+		}
 	case 0xA000:
 		// set index to val
 		vm->index_reg = opcode & 0xFFF;
