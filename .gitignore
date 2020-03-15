@@ -1,4 +1,6 @@
 .idea
+bin
+.clangd
 *.ch8
 *.png
 *.bmp
