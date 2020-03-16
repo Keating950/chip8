@@ -81,8 +81,9 @@ void load_rom(const char *path, chip8_vm *vm)
 
 void vm_cycle(chip8_vm *vm)
 {
-	unsigned short opcode = vm->rom[vm->pc] << 8 | vm->rom[vm->pc + 1];
-	const void *opcode_handles[] = {
+	const unsigned short opcode
+		= vm->rom[vm->pc] << 8 | vm->rom[vm->pc + 1];
+	const void *const opcode_handles[] = {
 		&&zero,	      &&jump,	    &&jump_and_link,	 &&reg_eq_im,
 		&&reg_neq_im, &&reg_eq_reg, &&load_halfword,	 &&add_unsigned,
 		&&math,	      &&set_idx,    &&jump_idx_plus_reg, &&random_and
