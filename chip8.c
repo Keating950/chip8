@@ -8,16 +8,12 @@
 #include <string.h>
 #include <time.h>
 
-// clang-format off
-#define handle_error(msg) \
-  do {                    \
-    perror(msg);          \
-    exit(EXIT_FAILURE);   \
-  } while (0)
-// clang-format on
+#define handle_error(msg)                                                      \
+	do {                                                                   \
+		perror(msg);                                                   \
+		exit(EXIT_FAILURE);                                            \
+	} while (0)
 #define UINT8_MAX 0xFF
-#define execute_opcode(vm, opcode)                                             \
-	function_table[compute_hash(opcode & 0x00F)](vm, opcode);
 
 chip8_vm initialize_chip8()
 {
@@ -27,7 +23,7 @@ chip8_vm initialize_chip8()
 		.v = { 0 },
 		.idx = 0,
 		.pc = 0,
-		.stack = { 0 },
+		.call_stack = { 0 },
 		.sp = 0,
 		.screen = { 0 },
 		.delay_timer = 0,
@@ -36,29 +32,6 @@ chip8_vm initialize_chip8()
 		.draw_flag = false,
 	};
 	return vm;
-}
-
-void stack_push(unsigned short val, chip8_vm *vm)
-{
-	if (vm->sp < 16)
-		vm->stack[vm->sp++] = val;
-	else
-		handle_error("Attempted push to full VM Stack\n");
-}
-
-unsigned short stack_pop(chip8_vm *vm)
-{
-	if (vm->sp > 0)
-		return vm->stack[--vm->sp];
-	else
-		handle_error("Attempted pop from empty VM Stack\n");
-}
-
-unsigned short *stack_peep(chip8_vm *vm)
-{
-	if (vm->sp > 0)
-		return &(vm->stack[(vm->sp) - 1]);
-	return NULL;
 }
 
 void load_rom(const char *path, chip8_vm *vm)
@@ -76,6 +49,40 @@ void load_rom(const char *path, chip8_vm *vm)
 	vm->rom = (unsigned char *)mmap(NULL, 1, PROT_READ, MAP_PRIVATE, fd, 0);
 }
 
+static void push(chip8_vm *vm)
+{
+	if (vm->sp < 16)
+		vm->call_stack[vm->sp++] = vm->pc;
+	else
+		handle_error("Attempted push to full VM Stack\n");
+}
+
+static unsigned short pop(chip8_vm *vm)
+{
+	if (vm->sp > 0)
+		return vm->call_stack[--vm->sp];
+	else
+		handle_error("Attempted pop from empty VM Stack\n");
+}
+
+static void xor_screen(chip8_vm *vm, short x, short y, short height)
+{
+	const short topmost_row = vm->v[y] - (height / 2);
+	const short bottommost_row = vm->v[y] + (height / 2);
+	const short leftmost_col = vm->v[x] - 4;
+	const short rightmost_col = vm->v[x] + 4;
+	vm->v[0xF] = 0; // reset the collision flag
+	vm->draw_flag = true;
+	for (int i = topmost_row; i < bottommost_row; i++) {
+		for (int j = leftmost_col; j < rightmost_col; j++) {
+			const bool tmp = vm->screen[i][j];
+			vm->screen[i][j] ^= 1;
+			if (tmp != vm->screen[i][j])
+				vm->v[0xF] = 1;
+		}
+	}
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
@@ -83,10 +90,13 @@ void vm_cycle(chip8_vm *vm)
 {
 	const unsigned short opcode
 		= vm->rom[vm->pc] << 8 | vm->rom[vm->pc + 1];
+	/* FLAG: Try declaring this static -- suspect it might lead to an error
+	if vm_cycle's location in memory moves, but worth investigating */
 	const void *const opcode_handles[] = {
 		&&zero,	      &&jump,	    &&jump_and_link,	 &&reg_eq_im,
 		&&reg_neq_im, &&reg_eq_reg, &&load_halfword,	 &&add_unsigned,
-		&&math,	      &&set_idx,    &&jump_idx_plus_reg, &&random_and
+		&&math,	      &&set_idx,    &&jump_idx_plus_reg, &&random_and,
+		&&draw,
 	};
 	if (opcode_handles[(opcode & 0xF000) >> 12] != NULL)
 		goto *opcode_handles[(opcode & 0xF000) >> 12];
@@ -105,7 +115,7 @@ zero:
 		break;
 	case 0x000E:
 		// jr $ra
-		vm->pc = stack_pop(vm);
+		vm->pc = pop(vm);
 		break;
 	default:
 		// deprecated instruction
@@ -118,7 +128,7 @@ jump:
 	return;
 jump_and_link:
 	// call subroutine (store pc)
-	stack_push(vm->pc, vm);
+	push(vm);
 	vm->pc = opcode & 0x0FFF;
 	return;
 reg_eq_im:
@@ -192,7 +202,9 @@ math:
 		// euclidean division by two; set VF if remainder
 		// i.e. arithmetic right shift
 		vm->v[0xF] = vm->v[(opcode & 0) >> 8] & 1;
-		vm->v[(opcode & 0) >> 8] >>= 1;
+		vm->v[(opcode & 0x00FF) >> 8] >>= 1;
+		vm->pc += 2;
+		return;
 	case 0x7:
 		// same as 0x5, but Vy-Vx instead of Vx-Vy
 		vm->v[0xF]
@@ -205,6 +217,8 @@ math:
 		// i.e. arithmetic left shift
 		vm->v[0xF] = vm->v[(opcode & 0) >> 8] & 1;
 		vm->v[(opcode & 0) >> 8] <<= 1;
+		vm->pc += 2;
+		return;
 	}
 set_idx:
 	vm->idx = opcode & 0x0FFF;
@@ -218,5 +232,11 @@ random_and:
 	vm->v[(opcode & 0x0F00) >> 8] = (opcode & 0x00FF) & (rand() % 255);
 	vm->pc += 2;
 	return;
+draw:
+	xor_screen(vm, (opcode & 0x0F00) >> 8, (opcode & 0x00F0) >> 4,
+		   (opcode & 0x00F));
+	vm->pc += 2;
+	return;
+skip_if_key:
 }
 #pragma clang diagnostic pop

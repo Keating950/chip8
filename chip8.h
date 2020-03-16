@@ -9,7 +9,7 @@ typedef struct CHIP8_VM_T {
 	unsigned char v[0x10]; // cpu registers
 	unsigned short idx;
 	unsigned short pc; // program counter
-	unsigned short stack[16];
+	unsigned short call_stack[16];
 	short sp; // stack pointer
 	bool screen[0x40][0x20];
 	unsigned char delay_timer; // delay register; should be 60hz
@@ -19,10 +19,6 @@ typedef struct CHIP8_VM_T {
 } chip8_vm;
 
 chip8_vm initialize_chip8();
-
-void stack_push(unsigned short val, chip8_vm *vm);
-
-unsigned short stack_pop(chip8_vm *vm);
 
 void load_rom(const char *path, chip8_vm *vm);
 
