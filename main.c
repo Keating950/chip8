@@ -98,6 +98,6 @@ int main(int argc, char **argv)
 
 	chip8_vm vm = initialize_chip8();
 	load_rom(argv[1], &vm);
-	print_rom(vm);
+	vm_cycle(&vm);
 	return 0;
 }

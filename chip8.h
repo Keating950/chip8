@@ -26,6 +26,6 @@ unsigned short stack_pop(chip8_vm *vm);
 
 void load_rom(const char *path, chip8_vm *vm);
 
-unsigned short vm_cycle(chip8_vm *vm);
+void vm_cycle(chip8_vm *vm);
 
 #endif // CHIP8_H
