@@ -83,9 +83,9 @@ void vm_cycle(chip8_vm *vm)
 {
 	unsigned short opcode = vm->rom[vm->pc] << 8 | vm->rom[vm->pc + 1];
 	const void *opcode_handles[] = {
-		&&zero,	      &&jump,	    &&jump_and_link, &&reg_eq_im,
-		&&reg_neq_im, &&reg_eq_reg, &&load_halfword, &&add_unsigned,
-		&&math,	      &&set_idx,
+		&&zero,	      &&jump,	    &&jump_and_link,	 &&reg_eq_im,
+		&&reg_neq_im, &&reg_eq_reg, &&load_halfword,	 &&add_unsigned,
+		&&math,	      &&set_idx,    &&jump_idx_plus_reg, &&random_and
 	};
 	if (opcode_handles[(opcode & 0xF000) >> 12] != NULL)
 		goto *opcode_handles[(opcode & 0xF000) >> 12];
@@ -206,11 +206,10 @@ math:
 		vm->v[(opcode & 0) >> 8] <<= 1;
 	}
 set_idx:
-	// set index to val
 	vm->idx = opcode & 0x0FFF;
 	vm->pc += 2;
 	return;
-jump_idx_plus_v:
+jump_idx_plus_reg:
 	vm->pc = vm->v[0] + (opcode & 0x0FFF);
 	return;
 random_and:
