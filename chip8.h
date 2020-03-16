@@ -7,7 +7,7 @@ typedef struct CHIP8_VM_T {
 	//  unsigned char rom[0x800];
 	unsigned char *rom;
 	unsigned char v[0x10]; // cpu registers
-	unsigned short index_reg;
+	unsigned short idx;
 	unsigned short pc; // program counter
 	unsigned short stack[16];
 	short sp; // stack pointer
@@ -15,7 +15,7 @@ typedef struct CHIP8_VM_T {
 	unsigned char delay_timer; // delay register; should be 60hz
 	unsigned char sound_timer; // same as above
 	bool keyboard[0x10]; // hex keyboard - better as some kind of enum?
-	unsigned short draw_instruction;
+	bool draw_flag;
 } chip8_vm;
 
 chip8_vm initialize_chip8();

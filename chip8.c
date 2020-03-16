@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <string.h>
+#include <time.h>
 
 // clang-format off
 #define handle_error(msg) \
@@ -20,12 +22,10 @@
 chip8_vm initialize_chip8()
 {
 	chip8_vm vm = {
-		//    .opcode = 0,
 		.internal_mem = { 0 },
-		//    .rom = {0},
 		.rom = 0,
 		.v = { 0 },
-		.index_reg = 0,
+		.idx = 0,
 		.pc = 0,
 		.stack = { 0 },
 		.sp = 0,
@@ -33,7 +33,7 @@ chip8_vm initialize_chip8()
 		.delay_timer = 0,
 		.sound_timer = 0,
 		.keyboard = { false },
-		.draw_instruction = 0,
+		.draw_flag = false,
 	};
 	return vm;
 }
@@ -76,22 +76,30 @@ void load_rom(const char *path, chip8_vm *vm)
 	vm->rom = (unsigned char *)mmap(NULL, 1, PROT_READ, MAP_PRIVATE, fd, 0);
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-label"
+
 void vm_cycle(chip8_vm *vm)
 {
 	unsigned short opcode = vm->rom[vm->pc] << 8 | vm->rom[vm->pc + 1];
-	const void *opcode_handles[]
-		= { &&zero, &&one, &&two,   &&three, &&four,
-		    &&five, &&six, &&seven, &&eight };
+	const void *opcode_handles[] = {
+		&&zero,	      &&jump,	    &&jump_and_link, &&reg_eq_im,
+		&&reg_neq_im, &&reg_eq_reg, &&load_halfword, &&add_unsigned,
+		&&math,	      &&set_idx,
+	};
 	if (opcode_handles[(opcode & 0xF000) >> 12] != NULL)
 		goto *opcode_handles[(opcode & 0xF000) >> 12];
-	fprintf(stderr, "Error: Unknown opcode %#x\n", opcode);
+	fprintf(stderr, "Error: Unknown opcode %#X\n", opcode);
 	exit(EXIT_FAILURE);
 
 zero:
 	switch (opcode & 0x000F) {
 	case 0x0000:
 		// clear screen
-		vm->draw_instruction = 0x00E0;
+		vm->draw_flag = true;
+		//		vm->screen = {false}{false};
+		memset(vm->screen, false,
+		       sizeof(vm->screen[0][0]) * 0x40 * 0x20);
 		vm->pc += 2;
 		break;
 	case 0x000E:
@@ -103,39 +111,39 @@ zero:
 		vm->pc += 2;
 		break;
 	}
-one:
+jump:
 	// jump (don't store pc)
 	vm->pc = opcode & 0x0FFF;
 	return;
-two:
+jump_and_link:
 	// call subroutine (store pc)
 	stack_push(vm->pc, vm);
 	vm->pc = opcode & 0x0FFF;
 	return;
-three:
+reg_eq_im:
 	// skip next instruction if reg==00NN
 	vm->pc += vm->v[(opcode & 0x0F00) >> 8] == (opcode & 0x00FF) ? 4 : 2;
 	return;
-four:
+reg_neq_im:
 	// skip next instruction if reg!=00NN
 	vm->pc += vm->v[(opcode & 0x0F00) >> 8] != (opcode & 0x00FF) ? 4 : 2;
 	return;
-five:
+reg_eq_reg:
 	// skip next instruction if Vx==Vy
 	vm->pc += vm->v[(opcode & 0x0F00) >> 8] == vm->v[opcode & 0x00F0] ? 4 :
 									    2;
 	return;
-six:
+load_halfword:
 	// set Vx to 00NN
 	vm->v[(opcode & 0x0F00) >> 8] = opcode & 0x00FF;
 	vm->pc += 2;
 	return;
-seven:
+add_unsigned:
 	// add 00NN to Vx without affecting carry.
 	vm->v[(opcode & 0x0F00) >> 8] += opcode & 0x00FF;
 	vm->pc += 2;
 	return;
-eight:
+math:
 	switch (opcode & 0x000F) {
 	case 0x0:
 		// set Vx=Vy
@@ -197,9 +205,18 @@ eight:
 		vm->v[0xF] = vm->v[(opcode & 0) >> 8] & 1;
 		vm->v[(opcode & 0) >> 8] <<= 1;
 	}
-ten:
+set_idx:
 	// set index to val
-	vm->index_reg = opcode & 0xFFF;
+	vm->idx = opcode & 0x0FFF;
+	vm->pc += 2;
+	return;
+jump_idx_plus_v:
+	vm->pc = vm->v[0] + (opcode & 0x0FFF);
+	return;
+random_and:
+	srand(clock());
+	vm->v[(opcode & 0x0F00) >> 8] = (opcode & 0x00FF) & (rand() % 255);
 	vm->pc += 2;
 	return;
 }
+#pragma clang diagnostic pop
