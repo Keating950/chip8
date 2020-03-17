@@ -49,6 +49,20 @@ void load_rom(const char *path, chip8_vm *vm)
 	vm->rom = (unsigned char *)mmap(NULL, 1, PROT_READ, MAP_PRIVATE, fd, 0);
 }
 
+void print_rom(chip8_vm vm)
+{
+	do {
+		for (int i = 0; i < 3; i++) {
+			unsigned short opcode
+				= vm.rom[vm.pc] << 8 | vm.rom[vm.pc + 1];
+			unsigned short instruction = opcode & 0xf000;
+			printf("%#X  ", instruction);
+			vm.pc += 2;
+		}
+		printf("\n");
+	} while (vm.pc < 800);
+}
+
 static void push(chip8_vm *vm)
 {
 	if (vm->sp < 16)
@@ -238,5 +252,6 @@ draw:
 	vm->pc += 2;
 	return;
 skip_if_key:
+	return;
 }
 #pragma clang diagnostic pop
