@@ -1,4 +1,6 @@
-#include "chip8.h"
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "hicpp-signed-bitwise"
+#include "../lib/chip8.h"
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -8,14 +10,14 @@
 #include <string.h>
 #include <time.h>
 
-#define handle_error(msg)                                                      \
+#define error_crash(msg)                                                       \
 	do {                                                                   \
 		perror(msg);                                                   \
 		exit(EXIT_FAILURE);                                            \
 	} while (0)
 #define UINT8_MAX 0xFF
 
-chip8_vm initialize_chip8()
+chip8_vm init_chip8()
 {
 	chip8_vm vm = {
 		.internal_mem = { 0 },
@@ -25,7 +27,7 @@ chip8_vm initialize_chip8()
 		.pc = 0,
 		.call_stack = { 0 },
 		.sp = 0,
-		.screen = { 0 },
+		.screen = { false },
 		.delay_timer = 0,
 		.sound_timer = 0,
 		.keyboard = { false },
@@ -40,12 +42,12 @@ void load_rom(const char *path, chip8_vm *vm)
 	struct stat sb;
 	fd = open(path, O_RDONLY);
 	if (fd == -1)
-		handle_error("fd was -1 after opening rom\n");
+		error_crash("fd was -1 after opening rom\n");
 	if (fstat(fd, &sb) == -1) /* To obtain file size */
-		handle_error("fstat error loading ROM\n");
+		error_crash("fstat error loading ROM\n");
 	if (sb.st_size > 0x800)
-		handle_error("ROM size exceeds specification's allocatable"
-			     "internal memory\n");
+		error_crash("ROM size exceeds specification's allocatable"
+			    "internal memory\n");
 	vm->rom = (unsigned char *)mmap(NULL, 1, PROT_READ, MAP_PRIVATE, fd, 0);
 }
 
@@ -54,8 +56,10 @@ void print_rom(chip8_vm vm)
 	do {
 		for (int i = 0; i < 3; i++) {
 			unsigned short opcode
-				= vm.rom[vm.pc] << 8 | vm.rom[vm.pc + 1];
-			unsigned short instruction = opcode & 0xf000;
+				= vm.rom[vm.pc] << 8u
+				  | vm.rom[vm.pc
+					   + 1]; // NOLINT(hicpp-signed-bitwise)
+			unsigned int instruction = opcode & 0xf000u;
 			printf("%#X  ", instruction);
 			vm.pc += 2;
 		}
@@ -68,7 +72,7 @@ static void push(chip8_vm *vm)
 	if (vm->sp < 16)
 		vm->call_stack[vm->sp++] = vm->pc;
 	else
-		handle_error("Attempted push to full VM Stack\n");
+		error_crash("Attempted push to full VM Stack\n");
 }
 
 static unsigned short pop(chip8_vm *vm)
@@ -76,30 +80,29 @@ static unsigned short pop(chip8_vm *vm)
 	if (vm->sp > 0)
 		return vm->call_stack[--vm->sp];
 	else
-		handle_error("Attempted pop from empty VM Stack\n");
+		error_crash("Attempted pop from empty VM Stack\n");
 }
 
 static void xor_screen(chip8_vm *vm, short x, short y, short height)
 {
-	const short topmost_row = vm->v[y] - (height / 2);
-	const short bottommost_row = vm->v[y] + (height / 2);
+	const short topmost_row = vm->v[y] - height / 2;
+	const short bottommost_row = vm->v[y] + height / 2;
 	const short leftmost_col = vm->v[x] - 4;
 	const short rightmost_col = vm->v[x] + 4;
 	vm->v[0xF] = 0; // reset the collision flag
-	vm->draw_flag = true;
 	for (int i = topmost_row; i < bottommost_row; i++) {
 		for (int j = leftmost_col; j < rightmost_col; j++) {
 			const bool tmp = vm->screen[i][j];
 			vm->screen[i][j] ^= 1;
-			if (tmp != vm->screen[i][j])
+			if (tmp == 1 && vm->screen[i][j] == 0)
 				vm->v[0xF] = 1;
 		}
 	}
 }
 
 #pragma clang diagnostic push
+#pragma ide diagnostic ignored "OCDFAInspection"
 #pragma clang diagnostic ignored "-Wunused-label"
-
 void vm_cycle(chip8_vm *vm)
 {
 	const unsigned short opcode
@@ -112,10 +115,12 @@ void vm_cycle(chip8_vm *vm)
 		&&math,	      &&set_idx,    &&jump_idx_plus_reg, &&random_and,
 		&&draw,
 	};
-	if (opcode_handles[(opcode & 0xF000) >> 12] != NULL)
-		goto *opcode_handles[(opcode & 0xF000) >> 12];
-	fprintf(stderr, "Error: Unknown opcode %#X\n", opcode);
-	exit(EXIT_FAILURE);
+	if (opcode_handles[(opcode & 0xF000u) >> 12])
+		goto *opcode_handles[(opcode & 0xF000u) >> 12];
+	else {
+		fprintf(stderr, "Error: Unknown opcode %#X\n", opcode);
+		exit(EXIT_FAILURE);
+	}
 
 zero:
 	switch (opcode & 0x000F) {
@@ -123,8 +128,7 @@ zero:
 		// clear screen
 		vm->draw_flag = true;
 		//		vm->screen = {false}{false};
-		memset(vm->screen, false,
-		       sizeof(vm->screen[0][0]) * 0x40 * 0x20);
+		memset(vm->screen, 0x40 * 0x20, false);
 		vm->pc += 2;
 		break;
 	case 0x000E:
@@ -197,9 +201,9 @@ math:
 		return;
 	case 0x4:
 		// carry-aware add
-		vm->v[0xF]
-			= (vm->v[(opcode & 0) >> 8] + vm->v[(opcode & 0) >> 8]
-			   > UINT8_MAX);
+		vm->v[0xF] = (unsigned char)(vm->v[(opcode & 0) >> 8]
+						     + vm->v[(opcode & 0) >> 8]
+					     > UINT8_MAX);
 		vm->v[(opcode & 0) >> 8]
 			= (vm->v[(opcode & 0) >> 8] + vm->v[(opcode & 0) >> 8])
 			  & 0x00F;
@@ -207,8 +211,8 @@ math:
 		return;
 	case 0x5:
 		// borrow-aware sub (n.b. VF set to !borrow)
-		vm->v[0xF]
-			= vm->v[(opcode & 0) >> 8] <= vm->v[(opcode & 0) >> 8];
+		vm->v[0xF] = (unsigned char)(vm->v[(opcode & 0x0F00) >> 8]
+					     <= vm->v[(opcode & 0x00F0) >> 4]);
 		vm->v[(opcode & 0) >> 8] -= vm->v[(opcode & 0) >> 8];
 		vm->pc += 2;
 		return;
@@ -221,9 +225,9 @@ math:
 		return;
 	case 0x7:
 		// same as 0x5, but Vy-Vx instead of Vx-Vy
-		vm->v[0xF]
-			= vm->v[(opcode & 0) >> 8] >= vm->v[(opcode & 0) >> 8];
-		vm->v[(opcode & 0) >> 8] -= vm->v[(opcode & 0) >> 8];
+		vm->v[0xF] = (unsigned char)(vm->v[(opcode & 0x0F00) >> 8]
+					     >= vm->v[(opcode & 0x00F0) >> 4]);
+		vm->v[(opcode & 0x0F00) >> 8] -= vm->v[(opcode & 0x00F0) >> 4];
 		vm->pc += 2;
 		return;
 	case 0xE:
@@ -247,6 +251,7 @@ random_and:
 	vm->pc += 2;
 	return;
 draw:
+	vm->draw_flag = true;
 	xor_screen(vm, (opcode & 0x0F00) >> 8, (opcode & 0x00F0) >> 4,
 		   (opcode & 0x00F));
 	vm->pc += 2;
@@ -254,4 +259,5 @@ draw:
 skip_if_key:
 	return;
 }
+#pragma clang diagnostic pop
 #pragma clang diagnostic pop
