@@ -1,17 +1,17 @@
 [
-  {
-    "directory": "/home/bigfoot-lives/cProjects/cppProjects/chip8/bin",
-    "command": "/usr/bin/clang  -isystem /usr/include/SDL2    -o CMakeFiles/chip8.dir/main.c.o   -c /home/bigfoot-lives/cProjects/cppProjects/chip8/main.c",
-    "file": "/home/bigfoot-lives/cProjects/cppProjects/chip8/main.c"
-  },
-  {
-    "directory": "/home/bigfoot-lives/cProjects/cppProjects/chip8/bin",
-    "command": "/usr/bin/clang  -isystem /usr/include/SDL2    -o CMakeFiles/chip8.dir/sdl_helpers.c.o   -c /home/bigfoot-lives/cProjects/cppProjects/chip8/sdl_helpers.c",
-    "file": "/home/bigfoot-lives/cProjects/cppProjects/chip8/sdl_helpers.c"
-  },
-  {
-    "directory": "/home/bigfoot-lives/cProjects/cppProjects/chip8/bin",
-    "command": "/usr/bin/clang  -isystem /usr/include/SDL2    -o CMakeFiles/chip8.dir/chip8.c.o   -c /home/bigfoot-lives/cProjects/cppProjects/chip8/chip8.c",
-    "file": "/home/bigfoot-lives/cProjects/cppProjects/chip8/chip8.c"
-  }
+{
+  "directory": "/home/bigfoot-lives/cProjects/chip8",
+  "command": "/usr/bin/gcc  -isystem /usr/include/SDL2   -std=c18 -O3 -DNDEBUG   -o CMakeFiles/chip8.dir/src/av_io.c.o   -c /home/bigfoot-lives/cProjects/chip8/src/av_io.c",
+  "file": "/home/bigfoot-lives/cProjects/chip8/src/av_io.c"
+},
+{
+  "directory": "/home/bigfoot-lives/cProjects/chip8",
+  "command": "/usr/bin/gcc  -isystem /usr/include/SDL2   -std=c18 -O3 -DNDEBUG   -o CMakeFiles/chip8.dir/src/chip8.c.o   -c /home/bigfoot-lives/cProjects/chip8/src/chip8.c",
+  "file": "/home/bigfoot-lives/cProjects/chip8/src/chip8.c"
+},
+{
+  "directory": "/home/bigfoot-lives/cProjects/chip8",
+  "command": "/usr/bin/gcc  -isystem /usr/include/SDL2   -std=c18 -O3 -DNDEBUG   -o CMakeFiles/chip8.dir/src/main.c.o   -c /home/bigfoot-lives/cProjects/chip8/src/main.c",
+  "file": "/home/bigfoot-lives/cProjects/chip8/src/main.c"
+}
 ]

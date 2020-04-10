@@ -1,5 +1,6 @@
 #ifndef CHIP8_H
 #define CHIP8_H
+#include <stdint.h>
 #include <stdbool.h>
 
 typedef struct CHIP8_VM_T {
@@ -11,7 +12,7 @@ typedef struct CHIP8_VM_T {
 	unsigned short pc; // program counter
 	unsigned short call_stack[16];
 	short sp; // stack pointer
-	bool screen[0x40][0x20];
+	uint32_t screen[0x20][0x40];
 	short delay_timer; // delay register; should be 60hz
 	short sound_timer; // same as above
 	bool keyboard[0x10]; // hex keyboard - better as some kind of enum?

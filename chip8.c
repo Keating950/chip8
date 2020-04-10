@@ -1,8 +1,7 @@
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "hicpp-signed-bitwise"
-#include "../lib/chip8.h"
+#include "chip8.h"
 #include <fcntl.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -10,12 +9,16 @@
 #include <string.h>
 #include <time.h>
 
-#define error_crash(msg)                                                       \
+#define ERROR_EXIT(msg)                                                       \
 	do {                                                                   \
 		perror(msg);                                                   \
 		exit(EXIT_FAILURE);                                            \
 	} while (0)
-#define UINT8_MAX 0xFF
+
+#define ROWS 0x40
+#define COLS 0x20
+#define ON 0xFFFFFFFF
+#define OFF 0
 
 chip8_vm init_chip8()
 {
@@ -27,7 +30,7 @@ chip8_vm init_chip8()
 		.pc = 0,
 		.call_stack = { 0 },
 		.sp = 0,
-		.screen = { false },
+		.screen = { OFF },
 		.delay_timer = 0,
 		.sound_timer = 0,
 		.keyboard = { false },
@@ -42,12 +45,12 @@ void load_rom(const char *path, chip8_vm *vm)
 	struct stat sb;
 	fd = open(path, O_RDONLY);
 	if (fd == -1)
-		error_crash("fd was -1 after opening rom\n");
+		ERROR_EXIT("fd was -1 after opening rom\n");
 	if (fstat(fd, &sb) == -1) /* To obtain file size */
-		error_crash("fstat error loading ROM\n");
+		ERROR_EXIT("fstat error loading ROM\n");
 	if (sb.st_size > 0x800)
-		error_crash("ROM size exceeds specification's allocatable"
-			    "internal memory\n");
+		ERROR_EXIT(
+			"ROM size exceeds specification's allocatable internal memory\n");
 	vm->rom = (unsigned char *)mmap(NULL, 1, PROT_READ, MAP_PRIVATE, fd, 0);
 }
 
@@ -55,10 +58,9 @@ void print_rom(chip8_vm vm)
 {
 	do {
 		for (int i = 0; i < 3; i++) {
-			unsigned short opcode
-				= vm.rom[vm.pc] << 8u
-				  | vm.rom[vm.pc
-					   + 1]; // NOLINT(hicpp-signed-bitwise)
+			unsigned short opcode =
+				vm.rom[vm.pc] << 8u |
+				vm.rom[vm.pc + 1]; // NOLINT(hicpp-signed-bitwise)
 			unsigned int instruction = opcode & 0xf000u;
 			printf("%#X  ", instruction);
 			vm.pc += 2;
@@ -72,7 +74,7 @@ static void push(chip8_vm *vm)
 	if (vm->sp < 16)
 		vm->call_stack[vm->sp++] = vm->pc;
 	else
-		error_crash("Attempted push to full VM Stack\n");
+		ERROR_EXIT("Attempted push to full VM Stack\n");
 }
 
 static unsigned short pop(chip8_vm *vm)
@@ -80,21 +82,21 @@ static unsigned short pop(chip8_vm *vm)
 	if (vm->sp > 0)
 		return vm->call_stack[--vm->sp];
 	else
-		error_crash("Attempted pop from empty VM Stack\n");
+		ERROR_EXIT("Attempted pop from empty VM Stack\n");
 }
 
-static void xor_screen(chip8_vm *vm, short x, short y, short height)
+static void xor_screen(chip8_vm *vm, int x, int y, int height)
 {
-	const short topmost_row = vm->v[y] - height / 2;
-	const short bottommost_row = vm->v[y] + height / 2;
-	const short leftmost_col = vm->v[x] - 4;
-	const short rightmost_col = vm->v[x] + 4;
+	const int topmost_row = vm->v[y] - height / 2;
+	const int bottommost_row = vm->v[y] + height / 2;
+	const int leftmost_col = vm->v[x] - 4;
+	const int rightmost_col = vm->v[x] + 4;
 	vm->v[0xF] = 0; // reset the collision flag
 	for (int i = topmost_row; i < bottommost_row; i++) {
 		for (int j = leftmost_col; j < rightmost_col; j++) {
-			const bool tmp = vm->screen[i][j];
-			vm->screen[i][j] ^= 1;
-			if (tmp == 1 && vm->screen[i][j] == 0)
+			const uint32_t tmp = vm->screen[i][j];
+			vm->screen[i][j] ^= vm->screen[i][j];
+			if (tmp == ON && vm->screen[i][j] == OFF)
 				vm->v[0xF] = 1;
 		}
 	}
@@ -105,11 +107,11 @@ static void xor_screen(chip8_vm *vm, short x, short y, short height)
 #pragma clang diagnostic ignored "-Wunused-label"
 void vm_cycle(chip8_vm *vm)
 {
-	const unsigned short opcode
-		= vm->rom[vm->pc] << 8 | vm->rom[vm->pc + 1];
+	const unsigned short opcode =
+		vm->rom[vm->pc] << 8 | vm->rom[vm->pc + 1];
 	/* FLAG: Try declaring this static -- suspect it might lead to an error
 	if vm_cycle's location in memory moves, but worth investigating */
-	const void *const opcode_handles[] = {
+	const void *opcode_handles[] = {
 		&&zero,	      &&jump,	    &&jump_and_link,	 &&reg_eq_im,
 		&&reg_neq_im, &&reg_eq_reg, &&load_halfword,	 &&add_unsigned,
 		&&math,	      &&set_idx,    &&jump_idx_plus_reg, &&random_and,
@@ -128,7 +130,7 @@ zero:
 		// clear screen
 		vm->draw_flag = true;
 		//		vm->screen = {false}{false};
-		memset(vm->screen, 0x40 * 0x20, false);
+		memset(vm->screen,OFF, ROWS * COLS);
 		vm->pc += 2;
 		break;
 	case 0x000E:
@@ -159,8 +161,8 @@ reg_neq_im:
 	return;
 reg_eq_reg:
 	// skip next instruction if Vx==Vy
-	vm->pc += vm->v[(opcode & 0x0F00) >> 8] == vm->v[opcode & 0x00F0] ? 4 :
-									    2;
+	vm->pc +=
+		vm->v[(opcode & 0x0F00) >> 8] == vm->v[opcode & 0x00F0] ? 4 : 2;
 	return;
 load_halfword:
 	// set Vx to 00NN
@@ -181,38 +183,38 @@ math:
 		return;
 	case 0x1:
 		// or
-		vm->v[(opcode & 0x0F00) >> 8] = vm->v[(opcode & 0x0F00) >> 8]
-						| vm->v[(opcode & 0x00F0) >> 8];
+		vm->v[(opcode & 0x0F00) >> 8] = vm->v[(opcode & 0x0F00) >> 8] |
+						vm->v[(opcode & 0x00F0) >> 8];
 		vm->pc += 2;
 		return;
 	case 0x2:
 		// and
-		vm->v[(opcode & 0x0F00) >> 8u]
-			= vm->v[(opcode & 0x0F00) >> 8u]
-			  & vm->v[(opcode & 0x00F0) >> 8u];
+		vm->v[(opcode & 0x0F00) >> 8u] =
+			vm->v[(opcode & 0x0F00) >> 8u] &
+			vm->v[(opcode & 0x00F0) >> 8u];
 		vm->pc += 2;
 		return;
 	case 0x3:
 		// xor
-		vm->v[(opcode & 0x0F00) >> 8u]
-			= vm->v[(opcode & 0x0F00) >> 8u]
-			  ^ vm->v[(opcode & 0x00F0) >> 8u];
+		vm->v[(opcode & 0x0F00) >> 8u] =
+			vm->v[(opcode & 0x0F00) >> 8u] ^
+			vm->v[(opcode & 0x00F0) >> 8u];
 		vm->pc += 2;
 		return;
 	case 0x4:
 		// carry-aware add
-		vm->v[0xF] = (unsigned char)(vm->v[(opcode & 0) >> 8]
-						     + vm->v[(opcode & 0) >> 8]
-					     > UINT8_MAX);
-		vm->v[(opcode & 0) >> 8]
-			= (vm->v[(opcode & 0) >> 8] + vm->v[(opcode & 0) >> 8])
-			  & 0x00F;
+		vm->v[0xf] = (unsigned char)(vm->v[(opcode & 0) >> 8] +
+						     vm->v[(opcode & 0) >> 8] >
+					     UINT8_MAX);
+		vm->v[(opcode & 0) >> 8] =
+			(vm->v[(opcode & 0) >> 8] + vm->v[(opcode & 0) >> 8]) &
+			0x00F;
 		vm->pc += 2;
 		return;
 	case 0x5:
 		// borrow-aware sub (n.b. VF set to !borrow)
-		vm->v[0xF] = (unsigned char)(vm->v[(opcode & 0x0F00) >> 8]
-					     <= vm->v[(opcode & 0x00F0) >> 4]);
+		vm->v[0xF] = (unsigned char)(vm->v[(opcode & 0x0F00) >> 8] <=
+					     vm->v[(opcode & 0x00F0) >> 4]);
 		vm->v[(opcode & 0) >> 8] -= vm->v[(opcode & 0) >> 8];
 		vm->pc += 2;
 		return;
@@ -225,8 +227,8 @@ math:
 		return;
 	case 0x7:
 		// same as 0x5, but Vy-Vx instead of Vx-Vy
-		vm->v[0xF] = (unsigned char)(vm->v[(opcode & 0x0F00) >> 8]
-					     >= vm->v[(opcode & 0x00F0) >> 4]);
+		vm->v[0xF] = (unsigned char)(vm->v[(opcode & 0x0F00) >> 8] >=
+					     vm->v[(opcode & 0x00F0) >> 4]);
 		vm->v[(opcode & 0x0F00) >> 8] -= vm->v[(opcode & 0x00F0) >> 4];
 		vm->pc += 2;
 		return;
