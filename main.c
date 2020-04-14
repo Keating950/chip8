@@ -1,23 +1,19 @@
 #define _GNU_SOURCE
+
 #include "chip8.h"
 #include "av_io.h"
 #include <SDL.h>
 #include <SDL_video.h>
 #include <stdio.h>
-#include <time.h>
 #include <unistd.h>
-#ifdef __MACH__ // macOS compatibility
-timing_mach_init();
-#endif
-#define ERROR_EXIT(msg)                                                       \
-	do {                                                                   \
-		perror(msg);                                                   \
-		exit(EXIT_FAILURE);                                            \
-	} while (0)
-#define zero_floor(n) n > 0 ? n : 0
-#define HZ_NS_CONV_FACTOR 6e-8
 
-short scancode_to_chip8(int scancode)
+#define ERROR_EXIT(msg)                                                   \
+	do {                                                              \
+		perror(msg);                                              \
+		exit(EXIT_FAILURE);                                       \
+	} while (0)
+
+int scancode_to_chip8(int scancode)
 {
 	switch (scancode) {
 	// 123C
@@ -61,77 +57,53 @@ short scancode_to_chip8(int scancode)
 	}
 }
 
-void main_loop(chip8_vm *vm, SDL_Window *win, SDL_Surface *surf, int audio_id)
+void main_loop(chip8_vm *vm, SDL_Window *win)
 {
 	SDL_Event event;
-	short key;
-	struct timespec lastread_ts;
-	struct timespec current_ts;
-	long time_delta;
-
-	clock_gettime(CLOCK_MONOTONIC, &lastread_ts);
+	int key;
+	unsigned int cycle_start;
 	while (true) {
+		cycle_start=SDL_GetTicks();
 		while (SDL_PollEvent(&event)) {
-			if (event.type == SDL_QUIT)
+			switch (event.type) {
+			case SDL_QUIT:
 				return;
-			else if (event.type == SDL_KEYDOWN ||
-				 event.type == SDL_KEYUP) {
-				key = scancode_to_chip8(event.key.keysym.sym);
+			case SDL_KEYDOWN:
+			case SDL_KEYUP:
+				key = scancode_to_chip8(
+					event.key.keysym.sym);
 				if (key > -1)
 					vm->keyboard[key] =
 						!(vm->keyboard[key]);
-			} else {
+			default:
 				continue;
 			}
 		}
-
-		clock_gettime(CLOCK_MONOTONIC, &current_ts);
-		time_delta = (current_ts.tv_nsec - lastread_ts.tv_nsec) *
-			     HZ_NS_CONV_FACTOR;
-		vm->delay_timer = zero_floor(vm->delay_timer - time_delta);
-		vm->sound_timer = zero_floor(vm->delay_timer - time_delta);
-		clock_gettime(CLOCK_MONOTONIC, &lastread_ts);
-
 		vm_cycle(vm);
-
-		if (SDL_GetAudioDeviceStatus(audio_id) == SDL_AUDIO_PLAYING &&
-		    vm->sound_timer <= 0x00) {
-			SDL_PauseAudioDevice(audio_id, 1);
-		}
-		if (SDL_GetAudioDeviceStatus(audio_id) == SDL_AUDIO_PAUSED &&
-		    vm->sound_timer >= 0x02) {
-			SDL_PauseAudioDevice(audio_id, 0);
-		}
+		// TODO: add audio
 		if (vm->draw_flag) {
-			//			draw_screen(vm, &surf);
+			draw_screen(vm, win);
 			SDL_UpdateWindowSurface(win);
+			vm->draw_flag=false;
 		}
+		vm->delay_timer--;
+		vm->sound_timer--;
+//		SDL_Delay(SDL_GetTicks()-cycle_start);
 	}
-}
-
-inline static void memset32u(void* dest, uint32_t val, size_t n)
-{
-	for (size_t i=0; i<n; i++)
-		*((uint32_t *)dest+i)=val;
 }
 
 // argc, argv format required by SDL
 int main(int argc, char **argv)
 {
-	/*if (argc < 2) {*/
-	/*  fprintf(stderr, "Wrong number of arguments. "*/
-	/*      "Usage:\tchip8 [path to rom]");*/
-	/*  exit(1);*/
-	/*}*/
-	SDL_Window *win;
-	init_window(&win);
+	if (argc < 2) {
+	  fprintf(stderr, "Wrong number of arguments.\n"
+	      "Usage:\n\tchip8 [path to rom]\n");
+	  exit(EXIT_FAILURE);
+	}
+	SDL_Window *win = init_window();
 	chip8_vm vm = init_chip8();
-	memset32u(vm.screen, UINT32_MAX, 0x40 * 0x20);
-	draw_screen(&vm, &win);
-	SDL_UpdateWindowSurface(win);
-	SDL_UpdateWindowSurface(win);
-	sleep(120);
-	//	load_rom(argv[1], &vm);
-	//	main_loop(&vm, win, surf, audio_id);
+	load_rom(argv[1], &vm);
+	main_loop(&vm, win);
+	free(win);
 	exit(EXIT_SUCCESS);
 }

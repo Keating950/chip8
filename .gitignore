@@ -1,6 +1,7 @@
 .idea
 build
 .clangd
+.ccls-cache
 *.ch8
 *.png
 *.bmp

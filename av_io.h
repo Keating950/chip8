@@ -7,7 +7,8 @@
 #include <SDL.h>
 #include "chip8.h"
 
-void init_window(SDL_Window **win);
+SDL_Window* init_window();
 int init_audio();
-void draw_screen(const chip8_vm *vm, SDL_Window **win);
+void print_vm_screen(const chip8_vm *vm);
+void draw_screen(const chip8_vm *vm, SDL_Window *win);
 #endif //CHIP8_AV_IO_H

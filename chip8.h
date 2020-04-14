@@ -13,8 +13,8 @@ typedef struct CHIP8_VM_T {
 	unsigned short call_stack[16];
 	short sp; // stack pointer
 	uint32_t screen[0x20][0x40];
-	short delay_timer; // delay register; should be 60hz
-	short sound_timer; // same as above
+	int delay_timer; // delay register; should be 60hz
+	int sound_timer; // same as above
 	bool keyboard[0x10]; // hex keyboard - better as some kind of enum?
 	bool draw_flag;
 } chip8_vm;

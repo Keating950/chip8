@@ -1,27 +1,24 @@
-//
-// Created by bigfootlives on 2020-03-19.
-//
-
 #include "av_io.h"
-//#include "SDL_image.h"
 #define SCREEN_WIDTH 64
 #define SCREEN_HEIGHT 32
-#define ERROR_EXIT(msg)                                                        \
-	do {                                                                   \
-		perror(msg);                                                   \
-		exit(EXIT_FAILURE);                                            \
+#define ERROR_EXIT(msg)                                                   \
+	do {                                                              \
+		perror(msg);                                              \
+		exit(EXIT_FAILURE);                                       \
 	} while (0)
 
-void init_window(SDL_Window **win)
+SDL_Window *init_window()
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
 		ERROR_EXIT("Could not init sdl");
-	*win = SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
-				SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH,
-				SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
-	SDL_Surface *surf = SDL_GetWindowSurface(*win);
+	SDL_Window *win =
+		SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
+				 SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH,
+				 SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+	SDL_Surface *surf = SDL_GetWindowSurface(win);
 	SDL_FillRect(surf, NULL, SDL_MapRGB(surf->format, 0, 0, 0));
-	SDL_UpdateWindowSurface(*win);
+	SDL_UpdateWindowSurface(win);
+	return win;
 }
 
 int init_audio()
@@ -40,15 +37,22 @@ int init_audio()
 	return id;
 }
 
-void draw_screen(const chip8_vm *vm, SDL_Window **win)
+void print_vm_screen(const chip8_vm *vm)
 {
-	const uint32_t window_format = SDL_GetWindowPixelFormat(*win);
-	SDL_Surface *vmscreen_surf = SDL_CreateRGBSurfaceWithFormatFrom(
-		(void *)vm->screen, 0x40, 0x20,
-		SDL_BITSPERPIXEL(window_format),
-		SCREEN_WIDTH * sizeof(vm->screen[0][0]), window_format);
-	if (!vmscreen_surf)
-		ERROR_EXIT(SDL_GetError());
-	SDL_BlitSurface(vmscreen_surf, NULL, SDL_GetWindowSurface(*win),
-		      NULL);
+	for (int i=0; i<0x20; i++) {
+		for (int j=0; j<0x40; j++) {
+			int px = vm->screen[i][j] > 0 ? 1 : 0;
+			printf("%2i", px);
+		}
+		puts("\n");
+	}
+}
+
+void draw_screen(const chip8_vm *vm, SDL_Window *win)
+{
+	SDL_Surface *screen = SDL_CreateRGBSurfaceWithFormatFrom(
+		(void *) vm->screen, 0x40, 0x20, 24, 0x40 * 4,
+		SDL_GetWindowPixelFormat(win));
+	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
+	return;
 }
