@@ -8,9 +8,9 @@
 #include <unistd.h>
 
 #define ERROR_EXIT(msg)                                                   \
-	do {                                                              \
-		perror(msg);                                              \
-		exit(EXIT_FAILURE);                                       \
+	do {                                                                  \
+		perror(msg);                                                      \
+		exit(EXIT_FAILURE);                                               \
 	} while (0)
 
 int scancode_to_chip8(int scancode)
@@ -57,24 +57,34 @@ int scancode_to_chip8(int scancode)
 	}
 }
 
+uint8_t await_keypress(void)
+{
+	SDL_Event event;
+	do {
+		SDL_PollEvent(&event);
+		if (event.type == SDL_QUIT)
+			exit(EXIT_SUCCESS);
+		else if (event.type == SDL_KEYDOWN)
+			return scancode_to_chip8(event.key.keysym.sym);
+	} while (1);
+}
+
 void main_loop(chip8_vm *vm, SDL_Window *win)
 {
 	SDL_Event event;
 	int key;
 	unsigned int cycle_start;
 	while (true) {
-		cycle_start=SDL_GetTicks();
+		cycle_start = SDL_GetTicks();
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			case SDL_QUIT:
 				return;
 			case SDL_KEYDOWN:
 			case SDL_KEYUP:
-				key = scancode_to_chip8(
-					event.key.keysym.sym);
+				key = scancode_to_chip8(event.key.keysym.sym);
 				if (key > -1)
-					vm->keyboard[key] =
-						!(vm->keyboard[key]);
+					vm->keyboard[key] = !(vm->keyboard[key]);
 			default:
 				continue;
 			}
@@ -84,11 +94,11 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 		if (vm->draw_flag) {
 			draw_screen(vm, win);
 			SDL_UpdateWindowSurface(win);
-			vm->draw_flag=false;
+			vm->draw_flag = false;
 		}
 		vm->delay_timer--;
 		vm->sound_timer--;
-//		SDL_Delay(SDL_GetTicks()-cycle_start);
+		//		SDL_Delay(SDL_GetTicks()-cycle_start);
 	}
 }
 
@@ -96,9 +106,9 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 int main(int argc, char **argv)
 {
 	if (argc < 2) {
-	  fprintf(stderr, "Wrong number of arguments.\n"
-	      "Usage:\n\tchip8 [path to rom]\n");
-	  exit(EXIT_FAILURE);
+		fprintf(stderr, "Wrong number of arguments.\n"
+						"Usage:\n\tchip8 [path to rom]\n");
+		exit(EXIT_FAILURE);
 	}
 	SDL_Window *win = init_window();
 	chip8_vm vm = init_chip8();

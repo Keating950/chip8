@@ -4,14 +4,12 @@
 #include <stdbool.h>
 
 typedef struct CHIP8_VM_T {
-	unsigned char internal_mem[0x200];
-	//  unsigned char rom[0x800];
-	unsigned char *rom;
-	unsigned char v[0x10]; // cpu registers
-	unsigned short idx;
-	unsigned short pc; // program counter
-	unsigned short call_stack[16];
-	short sp; // stack pointer
+	uint8_t mem[0x1000];
+	uint8_t v[0x10]; // cpu registers
+	uint16_t idx;
+	uint16_t pc; // program counter
+	uint16_t call_stack[0x10];
+	int sp; // stack pointer
 	uint32_t screen[0x20][0x40];
 	int delay_timer; // delay register; should be 60hz
 	int sound_timer; // same as above
