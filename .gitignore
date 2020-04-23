@@ -5,6 +5,9 @@ build
 *.ch8
 *.png
 *.bmp
+compile_commands.json
+tags
+chip8
 
 # Created by .ignore support plugin (hsz.mobi)
 ### C++ template

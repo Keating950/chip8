@@ -1,14 +1,57 @@
 #include "chip8.h"
-#include "av_io.h"
 #include <SDL.h>
 #include <SDL_video.h>
 #include <stdio.h>
-
 #define ERROR_EXIT(msg)                                                   \
 	do {                                                                  \
 		perror(msg);                                                      \
 		exit(EXIT_FAILURE);                                               \
 	} while (0)
+#define ZERO_FLOOR(N) ((N) > 0 ? (N) : 0)
+#define SCREEN_WIDTH 0x40
+#define SCREEN_HEIGHT 0x20
+#define FRAME_DURATION 16f
+
+SDL_Window *init_window(void)
+{
+	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
+		ERROR_EXIT("Could not init sdl");
+	SDL_Window *win =
+		SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
+						 SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH,
+						 SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+	SDL_Surface *surf = SDL_GetWindowSurface(win);
+	SDL_FillRect(surf, NULL, SDL_MapRGB(surf->format, 0, 0, 0));
+	SDL_UpdateWindowSurface(win);
+	return win;
+}
+
+int init_audio(void)
+{
+	SDL_AudioSpec spec, act_spec; // the specs of our piece of "music"
+	SDL_zero(spec);
+	spec.freq = 48000;
+	spec.format = AUDIO_S16SYS;
+	spec.channels = 1;
+	spec.samples = 4096;
+	int id;
+	if ((id = SDL_OpenAudioDevice(NULL, 0, &spec, &act_spec,
+								  SDL_AUDIO_ALLOW_ANY_CHANGE))
+		<= 0) {
+		ERROR_EXIT(SDL_GetError());
+	}
+	return id;
+}
+
+void draw_screen(const chip8_vm *vm, SDL_Window *win)
+{
+	SDL_Surface *screen =
+		SDL_CreateRGBSurfaceWithFormatFrom((void *)vm->screen, 0x40, 0x20,
+										   24, 0x40 * 4,
+										   SDL_GetWindowPixelFormat(win));
+	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
+	return;
+}
 
 int scancode_to_chip8(int scancode)
 {
@@ -57,12 +100,16 @@ int scancode_to_chip8(int scancode)
 uint8_t await_keypress(void)
 {
 	SDL_Event event;
+	int keypress;
 	do {
 		SDL_PollEvent(&event);
 		if (event.type == SDL_QUIT)
 			exit(EXIT_SUCCESS);
-		else if (event.type == SDL_KEYDOWN)
-			return scancode_to_chip8(event.key.keysym.sym);
+		else if (event.type == SDL_KEYDOWN) {
+			keypress = scancode_to_chip8(event.key.keysym.sym);
+			if (keypress > 0)
+				return (uint8_t)keypress;
+		}
 	} while (1);
 }
 
