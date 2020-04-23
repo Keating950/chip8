@@ -111,7 +111,7 @@ void vm_cycle(chip8_vm *vm)
 {
 	const unsigned short opcode =
 		vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
-	fprintf(stderr, "%04X\n", opcode);
+	/* fprintf(stderr, "%04X\n", opcode); */
 	static const void *opcode_handles[] = {
 		&&zero_ops,	  &&jump,		 &&jump_and_link, &&reg_eq_im,
 		&&reg_neq_im, &&reg_eq_reg,	 &&load_halfword, &&add_halfword,

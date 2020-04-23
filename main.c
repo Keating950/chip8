@@ -1,7 +1,10 @@
-#include "chip8.h"
+#include <stdio.h>
 #include <SDL.h>
 #include <SDL_video.h>
-#include <stdio.h>
+#include <time.h>
+#include <unistd.h>
+#include "chip8.h"
+
 #define ERROR_EXIT(msg)                                                   \
 	do {                                                                  \
 		perror(msg);                                                      \
@@ -10,12 +13,13 @@
 #define ZERO_FLOOR(N) ((N) > 0 ? (N) : 0)
 #define SCREEN_WIDTH 0x40
 #define SCREEN_HEIGHT 0x20
-#define FRAME_DURATION 16f
+#define FRAME_DURATION_US 2000 // clock speed of 500hz
+#define FRAME_DURATION_NS 2000000
 
 SDL_Window *init_window(void)
 {
 	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
-		ERROR_EXIT("Could not init sdl");
+		ERROR_EXIT("Could not initialize SDL");
 	SDL_Window *win =
 		SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
 						 SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH,
@@ -45,12 +49,11 @@ int init_audio(void)
 
 void draw_screen(const chip8_vm *vm, SDL_Window *win)
 {
-	SDL_Surface *screen =
-		SDL_CreateRGBSurfaceWithFormatFrom((void *)vm->screen, 0x40, 0x20,
-										   24, 0x40 * 4,
-										   SDL_GetWindowPixelFormat(win));
+	SDL_Surface *screen = SDL_CreateRGBSurfaceWithFormatFrom(
+		(void *)vm->screen, SCREEN_WIDTH, SCREEN_HEIGHT,
+		24, // bit depth of 24
+		SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
 	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
-	return;
 }
 
 int scancode_to_chip8(int scancode)
@@ -117,9 +120,11 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 {
 	SDL_Event event;
 	int key;
-	unsigned cycle_start;
-	while (true) {
-		cycle_start = SDL_GetTicks();
+	struct timespec frame_start;
+	struct timespec frame_end;
+	struct timespec delay = { 0, 0 };
+	while (1) {
+		clock_gettime(CLOCK_MONOTONIC, &frame_start);
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			case SDL_QUIT:
@@ -140,9 +145,15 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 			SDL_UpdateWindowSurface(win);
 			vm->draw_flag = false;
 		}
-		vm->delay_timer--;
-		vm->sound_timer--;
-		SDL_Delay(SDL_GetTicks() - cycle_start);
+		if (vm->delay_timer)
+			vm->delay_timer--;
+		if (vm->sound_timer)
+			vm->sound_timer--;
+		clock_gettime(CLOCK_MONOTONIC, &frame_end);
+		delay.tv_nsec =
+			ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
+		if (delay.tv_nsec)
+			nanosleep(&delay, NULL);
 	}
 }
 
