@@ -37,6 +37,7 @@ int init_audio()
 	return id;
 }
 
+/*
 void print_vm_screen(const chip8_vm *vm)
 {
 	for (int i=0; i<0x20; i++) {
@@ -47,6 +48,7 @@ void print_vm_screen(const chip8_vm *vm)
 		puts("\n");
 	}
 }
+*/
 
 void draw_screen(const chip8_vm *vm, SDL_Window *win)
 {

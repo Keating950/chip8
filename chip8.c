@@ -6,19 +6,35 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <time.h>
-
 #define ERROR_EXIT(msg)                                                   \
 	do {                                                                  \
-		perror(msg);                                                      \
+		fputs("ERROR: ", stderr);                                         \
+		fputs((msg), stderr);                                             \
 		exit(EXIT_FAILURE);                                               \
 	} while (0)
-
-#define ROWS 0x40
-#define COLS 0x20
-#define ON 0xFFFFFFFF
-#define OFF 0
+#define VX vm->v[(opcode & 0x0F00) >> 8]
+#define VY vm->v[(opcode & 0x00F0) >> 4]
 
 extern uint8_t await_keypress(void);
+
+const uint8_t chip8_fontset[0x50] = {
+	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+	0x20, 0x60, 0x20, 0x20, 0x70, // 1
+	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+	0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+	0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+	0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+	0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+	0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+	0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+	0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+	0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+	0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+	0xF0, 0x80, 0xF0, 0x80, 0x80 // F
+};
 
 chip8_vm init_chip8()
 {
@@ -30,12 +46,13 @@ chip8_vm init_chip8()
 		.pc = 200,
 		.call_stack = { 0 },
 		.sp = 0,
-		.screen = { { OFF } },
+		.screen = { 0 },
 		.delay_timer = 0,
 		.sound_timer = 0,
 		.keyboard = { false },
 		.draw_flag = false,
 	};
+	memcpy(&vm.mem, chip8_fontset, 0x50);
 	return vm;
 }
 
@@ -65,11 +82,29 @@ void print_rom(chip8_vm vm)
 			vm.pc += 2;
 		}
 		puts("\n");
-	} while (vm.pc < 800);
+	} while (vm.pc < 0x800);
 }
 
-static void draw_sprite(chip8_vm *vm, int x, int y, int height)
+static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
+	int height = opcode & 0x000Fu;
+	int x = 0;
+	int y = 0;
+	uint32_t pixel;
+	vm->v[0xF] &= 0;
+
+	for (y = 0; y < height; y++) {
+		pixel = vm->mem[vm->idx + y];
+		for (x = 0; x < 8; x++) {
+			//			if ((x + VX + (y + VY) * 64) > ROWS)
+			//				break;
+			if (pixel & (0x80 >> x)) {
+				if (vm->screen[x + VX + (y + VY) * 64])
+					vm->v[0xF] = 1;
+				vm->screen[x + VX + (y + VY) * 64] ^= UINT32_MAX;
+			}
+		}
+	}
 }
 
 void vm_cycle(chip8_vm *vm)
@@ -97,7 +132,7 @@ zero_ops:
 		// clear screen
 		vm->draw_flag = true;
 		for (int i = 0; i < 0x20; i++)
-			memset(vm->screen + i, OFF, 0x40);
+			memset(vm->screen + i, 0, 0x40);
 		vm->pc += 2;
 		return;
 	case 0xEE:
@@ -126,111 +161,94 @@ jump_and_link:
 	return;
 reg_eq_im:
 	// 3XNN: skip next instruction if Vx==NN
-	if ((vm->v[(opcode & 0x0F00) >> 8u]) == (opcode & 0x00FF))
+	if ((VX) == (opcode & 0xFF))
 		vm->pc += 4;
 	else
 		vm->pc += 2;
 	return;
 reg_neq_im:
 	// 4XNN: skip next instruction if reg!=00NN
-	if ((vm->v[(opcode & 0x0F00) >> 8u]) != (opcode & 0x00FF))
+	if ((VX) != (opcode & 0xFF))
 		vm->pc += 4;
 	else
 		vm->pc += 2;
 	return;
 reg_eq_reg:
 	// 5XY0: skip next instruction if Vx==Vy
-	for (;;) {
-		uint8_t vx = vm->v[(opcode & 0x0F00 >> 8)];
-		uint8_t vy = vm->v[(opcode & 0x00F0 >> 4)];
-		if (vx == vy)
-			vm->pc += 4;
-		else
-			vm->pc += 2;
-		return;
-	}
+	if (VX == VY)
+		vm->pc += 4;
+	else
+		vm->pc += 2;
+	return;
 load_halfword:
 	// 6XNN: set Vx to 00NN
-	vm->v[(opcode & 0x0F00u) >> 8] = (uint8_t)opcode & 0x00FFu;
+	VX = (uint8_t)opcode & 0x00FFu;
 	vm->pc += 2;
 	return;
 add_halfword:
 	// 7XNN: add 00NN to Vx without affecting carry.
-	vm->v[(opcode & 0x0F00u) >> 8] += (uint8_t)opcode & 0x00FFu;
+	VX += (uint8_t)opcode & 0x00FFu;
 	vm->pc += 2;
 	return;
 math:
 	switch (opcode & 0x000Fu) {
 	case 0x0:
 		// 8XY0: set Vx=Vy
-		vm->v[(opcode & 0x0F00u) >> 8] = vm->v[opcode & 0x00F0u >> 4];
+		VX = VY;
 		break;
 	case 0x1:
 		// 8XY1: Vx = Vx | Vy
-		vm->v[(opcode & 0x0F00) >> 8] |= vm->v[(opcode & 0x00F0u) >> 4];
+		VX |= VY;
 		break;
 	case 0x2:
 		// 8XY2: Vx = Vx & Vy
-		vm->v[(opcode & 0x0F00u) >> 8u] &= vm->v[(opcode & 0x00F0u) >> 4];
+		VX &= VY;
 		break;
 	case 0x3:
 		// 8XY3: Vx = Vx ^ Vy
-		vm->v[(opcode & 0x0F00u) >> 8u] ^= vm->v[(opcode & 0x00F0u) >> 4];
+		VX ^= VY;
 		break;
 	case 0x4:
 		// 8XY4: Vx+=vy, carry-aware
-		do {
-			uint8_t vx = vm->v[(opcode & 0x0F00) >> 8];
-			uint8_t vy = vm->v[(opcode & 0x00F0) >> 4];
-			int tmp = vx + vy;
-			vm->v[0xF] = (tmp > UINT8_MAX) ? 1 : 0;
-			vm->v[(opcode & 0x0F00) >> 8] = vx + vy;
-		} while (0);
+		vm->v[0xF] = (((uint32_t)VX + VY) > UINT8_MAX) ? 1 : 0;
+		VX += VY;
 		break;
 	case 0x5:
 		// 8XY5: borrow-aware sub (n.b. VF set to !borrow)
-		do {
-			uint8_t vx = vm->v[(opcode & 0x0F00) >> 8];
-			uint8_t vy = vm->v[(opcode & 0x00F0) >> 4];
-			vm->v[0xF] = (vx > vy) ? 1 : 0;
-			vm->v[(opcode & 0x0F00) >> 8] = vx - vy;
-		} while (0);
+		vm->v[0xF] = (VX > VY) ? 1 : 0;
+		VX += VY;
 		break;
 	case 0x6:
 		// 8XY6: euclidean division by two; set VF if remainder
 		// i.e. arithmetic right shift
 		// store lsb of Vx in VF
-		vm->v[0xF] = vm->v[(opcode & 0x0F00) >> 8] & 1;
-		vm->v[(opcode & 0x0F00) >> 8] >>= 1;
+		vm->v[0xF] = VX & 1;
+		VX >>= 1;
 		break;
 	case 0x7:
 		// 8XY7: same as 0x5, but Vy-Vx instead of Vx-Vy
 		do {
-			uint8_t vx = vm->v[(opcode & 0x0F00) >> 8];
-			uint8_t vy = vm->v[(opcode & 0x00F0) >> 4];
-			int tmp = vy - vx;
-			vm->v[0xF] = (tmp < 0) ? 1 : 0xF;
-			vm->v[(opcode & 0x00F0) >> 8] = vy - vx;
+			uint32_t tmp = VY - VX;
+			vm->v[0xF] = (tmp < 0) ? 1 : 0;
+			VY -= VX;
 		} while (0);
 		break;
 	case 0xE:
 		// 8XYE: multiplication by two; set VF if remainder
 		// i.e. arithmetic left shift
 		// store msb in vf
-		vm->v[0xF] = vm->v[(opcode & 0x0F00) >> 8] & 0x80;
-		vm->v[(opcode & 0x0F00) >> 8] <<= 1;
+		vm->v[0xF] = VX & 0x80;
+		VX <<= 1;
 		break;
 	default:
-		ERROR_EXIT("Unknown opcode")
+		ERROR_EXIT("Unknown opcode 8xxx");
 	}
 	vm->pc += 2;
 	return;
 reg_neq_reg:
 	// 9XY0: skip if Vx!=Vy
 	for (;;) {
-		uint8_t vx = vm->v[(opcode & 0x0F00 >> 8)];
-		uint8_t vy = vm->v[(opcode & 0x00F0 >> 4)];
-		if (vx != vy)
+		if (VX != VY)
 			vm->pc += 4;
 		else
 			vm->pc += 2;
@@ -247,53 +265,82 @@ jump_idx_plus_reg:
 	return;
 random_and:
 	// CXNN: set Vx to NN & random number 0-225
-	vm->v[(opcode & 0x0F00) >> 8] = (opcode & 0x00FF) & (rand() % 255);
+	VX = (opcode & 0x00FF) & (rand() % 255);
 	vm->pc += 2;
 	return;
 draw:
 	vm->draw_flag = true;
-	draw_sprite(vm, (opcode & 0x0F00) >> 8, (opcode & 0x00F0) >> 4,
-				(opcode & 0x00F));
+	draw_sprite(vm, opcode);
 	vm->pc += 2;
 	return;
 exxx_keyops:
 	switch (opcode & 0x00FF) {
 	case 0x9E:
 		// EX9E: Skip next instruction if key stored in Vx pressed
-		if (vm->keyboard[vm->v[opcode & 0x0F00 >> 8]])
+		if (vm->keyboard[VX])
 			vm->pc += 4;
 		else
 			vm->pc += 2;
 		return;
 	case 0xA1:
 		// EX9E: Skip next instruction if key stored in Vx NOT pressed
-		if (!(vm->keyboard[vm->v[opcode & 0x0F00 >> 8]]))
+		if (!(vm->keyboard[VX]))
 			vm->pc += 4;
 		else
 			vm->pc += 2;
 		return;
 	default:
-		ERROR_EXIT("Unknown opcode")
+		ERROR_EXIT("Unknown opcode Exxx");
 	}
 fxxx_ops:
 	switch (opcode & 0x00FF) {
 	case 0x07:
 		// FX07: Set Vx to value of delay timer
-		vm->v[(opcode & 0x0F00) >> 8] = vm->delay_timer;
+		VX = vm->delay_timer;
 		break;
 	case 0x0A:
 		// FX0A: Blocking I/O
-		vm->v[(opcode & 0x0F00) >> 8] = await_keypress();
+		VX = await_keypress();
 		break;
 	case 0x15:
 		// FX15: Set delay timer to the value of Vx
-		vm->delay_timer = vm->v[(opcode & 0x0F00) >> 8];
+		vm->delay_timer = VX;
 		break;
 	case 0x18:
 		// FX18: Set sound timer to the value of Vx
-		vm->sound_timer = vm->v[(opcode & 0x0F00) >> 8];
+		vm->sound_timer = VX;
 		break;
 	case 0x1E:
+		// FX1E: add Vx to idx. Set 0xF if there is overflow.
+		vm->v[0xF] = (((uint32_t)VX + vm->idx) > UINT16_MAX) ? 1 : 0;
+		vm->idx += VX;
+		break;
+	case 0x29:
+		// FX29: set idx to location char in Vx's sprite
+		vm->idx = VX * 5u;
+		break;
+	case 0x33:
+		// FX33: Store BCD representation of Vx in idx through idx+3
+		vm->mem[vm->idx] = VX / 100;
+		vm->mem[vm->idx + 1] = (VX / 10) % 10;
+		vm->mem[vm->idx + 2] = VX % 10;
+		break;
+	case 0x55:
+		// FX55: register dump: stores V0 through VX in memory,
+		// starting at idx
+		for (int i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
+			vm->mem[(vm->idx) + i] = vm->v[i];
+		}
+		break;
+	case 0x65:
+		// FX55: register load: loads V0 through VX from memory,
+		// starting from idx
+		for (int i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
+			vm->v[i] = vm->mem[(vm->idx) + i];
+		}
+		break;
+	default:
+		ERROR_EXIT("Unknown opcode Fxxx");
 	}
 	vm->pc += 2;
 	return;

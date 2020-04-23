@@ -1,11 +1,8 @@
-#define _GNU_SOURCE
-
 #include "chip8.h"
 #include "av_io.h"
 #include <SDL.h>
 #include <SDL_video.h>
 #include <stdio.h>
-#include <unistd.h>
 
 #define ERROR_EXIT(msg)                                                   \
 	do {                                                                  \
@@ -73,7 +70,7 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 {
 	SDL_Event event;
 	int key;
-	unsigned int cycle_start;
+	unsigned cycle_start;
 	while (true) {
 		cycle_start = SDL_GetTicks();
 		while (SDL_PollEvent(&event)) {
@@ -98,7 +95,7 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 		}
 		vm->delay_timer--;
 		vm->sound_timer--;
-		//		SDL_Delay(SDL_GetTicks()-cycle_start);
+		SDL_Delay(SDL_GetTicks() - cycle_start);
 	}
 }
 

@@ -29,4 +29,4 @@ print_vm_screen	av_io.c	/^void print_vm_screen(const chip8_vm *vm)$/;"	f	typeref
 push	chip8.c	/^static void push(chip8_vm *vm)$/;"	f	typeref:typename:void	file:
 scancode_to_chip8	main.c	/^int scancode_to_chip8(int scancode)$/;"	f	typeref:typename:int
 vm_cycle	chip8.c	/^void vm_cycle(chip8_vm *vm)$/;"	f	typeref:typename:void
-xor_screen	chip8.c	/^static void xor_screen(chip8_vm *vm, int x, int y, int height)$/;"	f	typeref:typename:void	file:
+xor_screen	chip8.c	/^static void draw_sprite(chip8_vm *vm, int x, int y, int height)$/;"	f	typeref:typename:void	file:
