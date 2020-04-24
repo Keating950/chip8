@@ -1,6 +1,8 @@
-#include <stdio.h>
 #include <SDL.h>
 #include <SDL_video.h>
+#include <setjmp.h>
+#include <signal.h>
+#include <stdio.h>
 #include <time.h>
 #include <unistd.h>
 #include "chip8.h"
@@ -9,12 +11,24 @@
 	do {                                                                  \
 		perror(msg);                                                      \
 		exit(EXIT_FAILURE);                                               \
-	} while (0)
+	} while (0);
 #define ZERO_FLOOR(N) ((N) > 0 ? (N) : 0)
 #define SCREEN_WIDTH 0x40
 #define SCREEN_HEIGHT 0x20
-#define FRAME_DURATION_US 2000 // clock speed of 500hz
-#define FRAME_DURATION_NS 2000000
+#define TIMER_HZ_NS 16666667
+
+jmp_buf env;
+
+static void catch_exit(int signo)
+{
+	switch (signo) {
+	case SIGINT:
+	case SIGTERM:
+	case SIGQUIT:
+	case SIGHUP:
+		longjmp(env, 1);
+	}
+}
 
 SDL_Window *init_window(void)
 {
@@ -24,7 +38,11 @@ SDL_Window *init_window(void)
 		SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
 						 SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH,
 						 SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+	if (!(win))
+		ERROR_EXIT("Failed to create window");
 	SDL_Surface *surf = SDL_GetWindowSurface(win);
+	if (!(surf))
+		ERROR_EXIT("Failed to create SDL surface");
 	SDL_FillRect(surf, NULL, SDL_MapRGB(surf->format, 0, 0, 0));
 	SDL_UpdateWindowSurface(win);
 	return win;
@@ -56,9 +74,9 @@ void draw_screen(const chip8_vm *vm, SDL_Window *win)
 	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
 }
 
-int scancode_to_chip8(int scancode)
+int keycode_to_chip8(int keycode)
 {
-	switch (scancode) {
+	switch (keycode) {
 	// 123C
 	case SDL_SCANCODE_6:
 		return 0x1;
@@ -109,7 +127,7 @@ uint8_t await_keypress(void)
 		if (event.type == SDL_QUIT)
 			exit(EXIT_SUCCESS);
 		else if (event.type == SDL_KEYDOWN) {
-			keypress = scancode_to_chip8(event.key.keysym.sym);
+			keypress = keycode_to_chip8(event.key.keysym.sym);
 			if (keypress > 0)
 				return (uint8_t)keypress;
 		}
@@ -123,6 +141,8 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 	struct timespec frame_start;
 	struct timespec frame_end;
 	struct timespec delay = { 0, 0 };
+	long delta;
+	long timers_last_decremented = 0;
 	while (1) {
 		clock_gettime(CLOCK_MONOTONIC, &frame_start);
 		while (SDL_PollEvent(&event)) {
@@ -131,7 +151,7 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 				return;
 			case SDL_KEYDOWN:
 			case SDL_KEYUP:
-				key = scancode_to_chip8(event.key.keysym.sym);
+				key = keycode_to_chip8(event.key.keysym.scancode);
 				if (key > -1)
 					vm->keyboard[key] = !(vm->keyboard[key]);
 			default:
@@ -145,11 +165,15 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 			SDL_UpdateWindowSurface(win);
 			vm->draw_flag = false;
 		}
-		if (vm->delay_timer)
-			vm->delay_timer--;
-		if (vm->sound_timer)
-			vm->sound_timer--;
 		clock_gettime(CLOCK_MONOTONIC, &frame_end);
+		delta = ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
+		if (timers_last_decremented += delta >= TIMER_HZ_NS) {
+			if (vm->delay_timer)
+				vm->delay_timer--;
+			if (vm->sound_timer)
+				vm->sound_timer--;
+			timers_last_decremented = 0;
+		}
 		delay.tv_nsec =
 			ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
 		if (delay.tv_nsec)
@@ -160,15 +184,22 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 // argc, argv format required by SDL
 int main(int argc, char **argv)
 {
+	int jumpval;
 	if (argc < 2) {
 		fprintf(stderr, "Wrong number of arguments.\n"
 						"Usage:\n\tchip8 [path to rom]\n");
 		exit(EXIT_FAILURE);
 	}
+	signal(SIGINT, catch_exit);
+	signal(SIGTERM, catch_exit);
+	signal(SIGQUIT, catch_exit);
+	signal(SIGHUP, catch_exit);
 	SDL_Window *win = init_window();
 	chip8_vm vm = init_chip8();
 	load_rom(argv[1], &vm);
-	main_loop(&vm, win);
-	free(win);
+	jumpval = setjmp(env);
+	if (!(jumpval))
+		main_loop(&vm, win);
+	SDL_DestroyWindow(win);
 	exit(EXIT_SUCCESS);
 }
