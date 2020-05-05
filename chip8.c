@@ -1,8 +1,5 @@
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
 #include <string.h>
 #include <time.h>
 #include "chip8.h"
@@ -10,8 +7,6 @@
 
 #define VX vm->v[(opcode & 0x0F00) >> 8]
 #define VY vm->v[(opcode & 0x00F0) >> 4]
-
-extern uint8_t await_keypress(void);
 
 const uint8_t chip8_fontset[0x50] = {
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -40,13 +35,13 @@ chip8_vm init_chip8()
 		.v = { 0 },
 		.idx = 0,
 		.pc = 200,
-		.call_stack = { 0 },
-		.sp = 0,
+		.stack = { 0 },
+		.sp = 15,
 		.screen = { 0 },
 		.delay_timer = 0,
 		.sound_timer = 0,
-		.keyboard = { false },
-		.draw_flag = false,
+		.keyboard = { 0 },
+		.draw_flag = 0,
 	};
 	memcpy(&vm.mem, chip8_fontset, 0x50);
 	return vm;
@@ -72,24 +67,23 @@ void load_rom(const char *path, chip8_vm *vm)
 static void print_keys(chip8_vm *vm)
 {
 	printf("[%c] ", vm->keyboard[0] ? '.' : '0');
-	for (int i=1; i<0xF; i++)
+	for (int i = 1; i < 0xF; i++)
 		printf("[%x] ", vm->keyboard[i] ? i : 0);
 	puts("\n");
 }
 
 static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
+	int x, y;
+	uint8_t pixel;
 	int height = opcode & 0x000Fu;
-	int x = 0;
-	int y = 0;
-	uint32_t pixel;
 	vm->v[0xF] = 0;
 
-	for (y = 0; y < height && (y+height) < ROWS; y++) {
+	for (y = 0; y < height && (y + height) < ROWS; y++) {
 		pixel = vm->mem[vm->idx + y];
 		for (x = 0; x < 8; x++) {
-			if ((x + VX) > COLS)
-				break;
+			//			if ((x + VX) > COLS)
+			//				break;
 			if (pixel & (0x80 >> x)) {
 				if (vm->screen[x + VX + (y + VY) * 64])
 					vm->v[0xF] = 1;
@@ -97,21 +91,18 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 			}
 		}
 	}
+	NOP;
 }
 
 void vm_cycle(chip8_vm *vm)
 {
-	const unsigned short opcode =
-		vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
-	/* fprintf(stderr, "%04X\n", opcode); */
-	/* print_keys(vm); */
+	const unsigned short opcode = vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
 	static const void *opcode_handles[] = {
 		&&zero_ops,	  &&jump,		 &&jump_and_link, &&reg_eq_im,
 		&&reg_neq_im, &&reg_eq_reg,	 &&load_halfword, &&add_halfword,
 		&&math,		  &&reg_neq_reg, &&set_idx,		  &&jump_idx_plus_reg,
 		&&random_and, &&draw,		 &&exxx_keyops,	  &&fxxx_ops,
 	};
-
 	if (opcode_handles[(opcode & 0xF000u) >> 12])
 		goto *opcode_handles[(opcode & 0xF000u) >> 12];
 	else {
@@ -123,15 +114,15 @@ zero_ops:
 	switch (opcode & 0x00FFu) {
 	case 0xE0:
 		// clear screen
-		vm->draw_flag = true;
-		for (int i = 0; i < 0x20; i++)
-			memset(vm->screen + i, 0, 0x40);
+		for (int i = 0; i < ROWS; i++)
+			memset(vm->screen + i * ROWS, 0, COLS);
+		vm->draw_flag = 1;
 		vm->pc += 2;
 		return;
 	case 0xEE:
 		// jr $ra
-		if (vm->sp > 0)
-			vm->pc = vm->call_stack[--vm->sp] + 2;
+		if (vm->sp < 15)
+			vm->pc = vm->stack[vm->sp++] + 2;
 		else
 			ERROR_EXIT("Attempted pop from empty VM Stack\n");
 		return;
@@ -146,8 +137,8 @@ jump:
 	return;
 jump_and_link:
 	// 2NNN: call subroutine (store pc)
-	if (vm->sp < 17)
-		vm->call_stack[vm->sp++] = vm->pc;
+	if (vm->sp > 0)
+		vm->stack[--vm->sp] = vm->pc;
 	else
 		ERROR_EXIT("Attempted push to full VM Stack\n");
 	vm->pc = opcode & 0x0FFFu;
@@ -262,7 +253,7 @@ random_and:
 	vm->pc += 2;
 	return;
 draw:
-	vm->draw_flag = true;
+	vm->draw_flag = 1;
 	draw_sprite(vm, opcode);
 	vm->pc += 2;
 	return;
@@ -270,14 +261,14 @@ exxx_keyops:
 	switch (opcode & 0x00FF) {
 	case 0x9E:
 		// EX9E: Skip next instruction if key stored in Vx pressed
-		if (vm->keyboard[VX])
+		if (vm->keyboard[(VX)])
 			vm->pc += 4;
 		else
 			vm->pc += 2;
 		return;
 	case 0xA1:
 		// EX9E: Skip next instruction if key stored in Vx NOT pressed
-		if (!(vm->keyboard[VX]))
+		if (!(vm->keyboard[(VX)]))
 			vm->pc += 4;
 		else
 			vm->pc += 2;
@@ -295,10 +286,10 @@ fxxx_ops:
 	case 0x0A:
 		// FX0A: Blocking I/O
 		// frames continue but pc doesnt advance until a key is pressed
-		for (size_t i=0; i<LEN(vm->keyboard); i++) {
+		for (size_t i = 0; i < LEN(vm->keyboard); i++) {
 			if (vm->keyboard[i]) {
-				VX=i;
-				vm->pc+=2;
+				VX = i;
+				vm->pc += 2;
 				return;
 			}
 		}

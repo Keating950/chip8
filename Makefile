@@ -15,11 +15,11 @@ SDL2=`pkg-config --cflags --libs sdl2`
 chip8: main.o chip8.o
 	$(CC) -o chip8 $(CFLAGS) $(SDL2) main.o chip8.o
 
-main.o: main.c
-	$(CC) -c $(CFLAGS) $(SDL2) main.c
+main.o: main.c util.h
+	$(CC) -c $(CFLAGS) $(SDL2) main.c util.h
 
-chip8.o: chip8.c chip8.h
-	$(CC) -c $(CFLAGS) $(SDL2) chip8.c chip8.h
+chip8.o: chip8.c chip8.h util.h
+	$(CC) -c $(CFLAGS) $(SDL2) chip8.c chip8.h util.h
 
 clean:
 	rm -f *.out *.o *.gch
