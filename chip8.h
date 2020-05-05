@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define ROWS 0x40
-#define COLS 0x20
+#define COLS 0x40
+#define ROWS 0x20
 
 typedef struct CHIP8_VM_T {
 	uint8_t mem[0x1000];

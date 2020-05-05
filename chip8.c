@@ -83,13 +83,13 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 	int x = 0;
 	int y = 0;
 	uint32_t pixel;
-	vm->v[0xF] &= 0;
+	vm->v[0xF] = 0;
 
-	for (y = 0; y < height; y++) {
+	for (y = 0; y < height && (y+height) < ROWS; y++) {
 		pixel = vm->mem[vm->idx + y];
 		for (x = 0; x < 8; x++) {
-			//			if ((x + VX + (y + VY) * 64) > ROWS)
-			//				break;
+			if ((x + VX) > COLS)
+				break;
 			if (pixel & (0x80 >> x)) {
 				if (vm->screen[x + VX + (y + VY) * 64])
 					vm->v[0xF] = 1;
@@ -104,7 +104,7 @@ void vm_cycle(chip8_vm *vm)
 	const unsigned short opcode =
 		vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
 	/* fprintf(stderr, "%04X\n", opcode); */
-	print_keys(vm);
+	/* print_keys(vm); */
 	static const void *opcode_handles[] = {
 		&&zero_ops,	  &&jump,		 &&jump_and_link, &&reg_eq_im,
 		&&reg_neq_im, &&reg_eq_reg,	 &&load_halfword, &&add_halfword,
@@ -295,7 +295,7 @@ fxxx_ops:
 	case 0x0A:
 		// FX0A: Blocking I/O
 		// frames continue but pc doesnt advance until a key is pressed
-		for (int i=0; i<LEN(vm->keyboard); i++) {
+		for (size_t i=0; i<LEN(vm->keyboard); i++) {
 			if (vm->keyboard[i]) {
 				VX=i;
 				vm->pc+=2;
@@ -334,7 +334,7 @@ fxxx_ops:
 	case 0x55:
 		// FX55: register dump: stores V0 through VX in memory,
 		// starting at idx
-		for (int i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
+		for (size_t i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
 			vm->mem[(vm->idx) + i] = vm->v[i];
 		}
 		vm->pc += 2;
@@ -342,7 +342,7 @@ fxxx_ops:
 	case 0x65:
 		// FX55: register load: loads V0 through VX from memory,
 		// starting from idx
-		for (int i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
+		for (size_t i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
 			vm->v[i] = vm->mem[(vm->idx) + i];
 		}
 		vm->pc += 2;
