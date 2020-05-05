@@ -24,8 +24,6 @@ chip8_vm init_chip8();
 
 void load_rom(const char *path, chip8_vm *vm);
 
-void print_rom(chip8_vm vm);
-
 void vm_cycle(chip8_vm *vm);
 
 #endif // CHIP8_H

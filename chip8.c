@@ -1,4 +1,3 @@
-#include "chip8.h"
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,12 +5,9 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <time.h>
-#define ERROR_EXIT(msg)                                                   \
-	do {                                                                  \
-		fputs("ERROR: ", stderr);                                         \
-		fputs((msg), stderr);                                             \
-		exit(EXIT_FAILURE);                                               \
-	} while (0)
+#include "chip8.h"
+#include "util.h"
+
 #define VX vm->v[(opcode & 0x0F00) >> 8]
 #define VY vm->v[(opcode & 0x00F0) >> 4]
 
@@ -73,16 +69,12 @@ void load_rom(const char *path, chip8_vm *vm)
 		ERROR_EXIT("Error reading file");
 }
 
-void print_rom(chip8_vm vm)
+static void print_keys(chip8_vm *vm)
 {
-	do {
-		for (int i = 0; i < 3; i++) {
-			uint16_t opcode = vm.mem[vm.pc] << 8u | vm.mem[vm.pc + 1];
-			printf("%#X  ", opcode);
-			vm.pc += 2;
-		}
-		puts("\n");
-	} while (vm.pc < 0x800);
+	printf("[%c] ", vm->keyboard[0] ? '.' : '0');
+	for (int i=1; i<0xF; i++)
+		printf("[%x] ", vm->keyboard[i] ? i : 0);
+	puts("\n");
 }
 
 static void draw_sprite(chip8_vm *vm, uint16_t opcode)
@@ -111,7 +103,8 @@ void vm_cycle(chip8_vm *vm)
 {
 	const unsigned short opcode =
 		vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
-	//fprintf(stderr, "%04X\n", opcode);
+	/* fprintf(stderr, "%04X\n", opcode); */
+	print_keys(vm);
 	static const void *opcode_handles[] = {
 		&&zero_ops,	  &&jump,		 &&jump_and_link, &&reg_eq_im,
 		&&reg_neq_im, &&reg_eq_reg,	 &&load_halfword, &&add_halfword,
@@ -297,33 +290,46 @@ fxxx_ops:
 	case 0x07:
 		// FX07: Set Vx to value of delay timer
 		VX = vm->delay_timer;
+		vm->pc += 2;
 		break;
 	case 0x0A:
 		// FX0A: Blocking I/O
-		VX = await_keypress();
+		// frames continue but pc doesnt advance until a key is pressed
+		for (int i=0; i<LEN(vm->keyboard); i++) {
+			if (vm->keyboard[i]) {
+				VX=i;
+				vm->pc+=2;
+				return;
+			}
+		}
 		break;
 	case 0x15:
 		// FX15: Set delay timer to the value of Vx
 		vm->delay_timer = VX;
+		vm->pc += 2;
 		break;
 	case 0x18:
 		// FX18: Set sound timer to the value of Vx
 		vm->sound_timer = VX;
+		vm->pc += 2;
 		break;
 	case 0x1E:
 		// FX1E: add Vx to idx. Set 0xF if there is overflow.
 		vm->v[0xF] = (((uint32_t)VX + vm->idx) > UINT16_MAX) ? 1 : 0;
 		vm->idx += VX;
+		vm->pc += 2;
 		break;
 	case 0x29:
 		// FX29: set idx to location char in Vx's sprite
 		vm->idx = VX * 5u;
+		vm->pc += 2;
 		break;
 	case 0x33:
 		// FX33: Store BCD representation of Vx in idx through idx+3
 		vm->mem[vm->idx] = VX / 100;
 		vm->mem[vm->idx + 1] = (VX / 10) % 10;
 		vm->mem[vm->idx + 2] = VX % 10;
+		vm->pc += 2;
 		break;
 	case 0x55:
 		// FX55: register dump: stores V0 through VX in memory,
@@ -331,6 +337,7 @@ fxxx_ops:
 		for (int i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
 			vm->mem[(vm->idx) + i] = vm->v[i];
 		}
+		vm->pc += 2;
 		break;
 	case 0x65:
 		// FX55: register load: loads V0 through VX from memory,
@@ -338,10 +345,10 @@ fxxx_ops:
 		for (int i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
 			vm->v[i] = vm->mem[(vm->idx) + i];
 		}
+		vm->pc += 2;
 		break;
 	default:
 		ERROR_EXIT("Unknown opcode Fxxx");
 	}
-	vm->pc += 2;
 	return;
 }

@@ -6,18 +6,37 @@
 #include <time.h>
 #include <unistd.h>
 #include "chip8.h"
+#include "util.h"
 
-#define ERROR_EXIT(msg)                                                   \
-	do {                                                                  \
-		perror(msg);                                                      \
-		exit(EXIT_FAILURE);                                               \
-	} while (0);
-#define ZERO_FLOOR(N) ((N) > 0 ? (N) : 0)
-#define SCREEN_WIDTH 0x40
-#define SCREEN_HEIGHT 0x20
-#define TIMER_HZ_NS 16666667
+SDL_Window *init_window(void);
+void main_loop(chip8_vm *vm, SDL_Window *win);
+static void catch_exit(int signo);
 
 jmp_buf env;
+
+// argc, argv format required by SDL
+int main(int argc, char **argv)
+{
+	int jumpval;
+	/* if (argc < 2) { */
+	/* 	fprintf(stderr, "Wrong number of arguments.\n" */
+	/* 					"Usage:\n\tchip8 [path to rom]\n"); */
+	/* 	exit(EXIT_FAILURE); */
+	/* } */
+	signal(SIGINT, catch_exit);
+	signal(SIGTERM, catch_exit);
+	signal(SIGQUIT, catch_exit);
+	signal(SIGHUP, catch_exit);
+	SDL_Window *win = init_window();
+	chip8_vm vm = init_chip8();
+	/* load_rom(argv[1], &vm); */
+	load_rom("roms/addition.ch8", &vm);
+	jumpval = setjmp(env);
+	if (!(jumpval))
+		main_loop(&vm, win);
+	SDL_DestroyWindow(win);
+	exit(EXIT_SUCCESS);
+}
 
 static void catch_exit(int signo)
 {
@@ -50,18 +69,16 @@ SDL_Window *init_window(void)
 
 int init_audio(void)
 {
-	SDL_AudioSpec spec, act_spec; // the specs of our piece of "music"
+	SDL_AudioSpec spec, act_spec;
 	SDL_zero(spec);
 	spec.freq = 48000;
 	spec.format = AUDIO_S16SYS;
 	spec.channels = 1;
 	spec.samples = 4096;
-	int id;
-	if ((id = SDL_OpenAudioDevice(NULL, 0, &spec, &act_spec,
-								  SDL_AUDIO_ALLOW_ANY_CHANGE))
-		<= 0) {
+	int id = SDL_OpenAudioDevice(NULL, 0, &spec, &act_spec,
+								 SDL_AUDIO_ALLOW_ANY_CHANGE);
+	if (id <= 0)
 		ERROR_EXIT(SDL_GetError());
-	}
 	return id;
 }
 
@@ -74,9 +91,9 @@ void draw_screen(const chip8_vm *vm, SDL_Window *win)
 	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
 }
 
-int keycode_to_chip8(int keycode)
+int scancode_to_chip8(int scancode)
 {
-	switch (keycode) {
+	switch (scancode) {
 	// 123C
 	case SDL_SCANCODE_6:
 		return 0x1;
@@ -118,26 +135,27 @@ int keycode_to_chip8(int keycode)
 	}
 }
 
-uint8_t await_keypress(void)
+void update_vm_keyboard(chip8_vm *vm)
 {
-	SDL_Event event;
-	int keypress;
-	do {
-		SDL_PollEvent(&event);
-		if (event.type == SDL_QUIT)
-			exit(EXIT_SUCCESS);
-		else if (event.type == SDL_KEYDOWN) {
-			keypress = keycode_to_chip8(event.key.keysym.sym);
-			if (keypress > 0)
-				return (uint8_t)keypress;
-		}
-	} while (1);
+	const uint8_t *keyboard = SDL_GetKeyboardState(NULL);
+	if (!keyboard)
+		ERROR_EXIT("Failed to get keyboard state array");
+	uint8_t keystates[] = {
+		keyboard[SDL_SCANCODE_M], keyboard[SDL_SCANCODE_6],
+		keyboard[SDL_SCANCODE_7], keyboard[SDL_SCANCODE_8],
+		keyboard[SDL_SCANCODE_Y], keyboard[SDL_SCANCODE_U],
+		keyboard[SDL_SCANCODE_I], keyboard[SDL_SCANCODE_H],
+		keyboard[SDL_SCANCODE_J], keyboard[SDL_SCANCODE_K],
+		keyboard[SDL_SCANCODE_N], keyboard[SDL_SCANCODE_COMMA],
+		keyboard[SDL_SCANCODE_9], keyboard[SDL_SCANCODE_O],
+		keyboard[SDL_SCANCODE_L], keyboard[SDL_SCANCODE_PERIOD],
+	};
+	memcpy(vm->keyboard, &keystates, LEN(keystates));
 }
 
 void main_loop(chip8_vm *vm, SDL_Window *win)
 {
 	SDL_Event event;
-	int key;
 	struct timespec frame_start;
 	struct timespec frame_end;
 	struct timespec delay = { 0, 0 };
@@ -149,15 +167,11 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 			switch (event.type) {
 			case SDL_QUIT:
 				return;
-			case SDL_KEYDOWN:
-			case SDL_KEYUP:
-				key = keycode_to_chip8(event.key.keysym.scancode);
-				if (key > -1)
-					vm->keyboard[key] = !(vm->keyboard[key]);
 			default:
 				continue;
 			}
 		}
+		update_vm_keyboard(vm);
 		vm_cycle(vm);
 		// TODO: add audio
 		if (vm->draw_flag) {
@@ -168,10 +182,8 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 		clock_gettime(CLOCK_MONOTONIC, &frame_end);
 		delta = ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
 		if (timers_last_decremented += delta >= TIMER_HZ_NS) {
-			if (vm->delay_timer)
-				vm->delay_timer--;
-			if (vm->sound_timer)
-				vm->sound_timer--;
+			vm->delay_timer = ZERO_FLOOR(vm->delay_timer - 1);
+			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			timers_last_decremented = 0;
 		}
 		delay.tv_nsec =
@@ -181,25 +193,3 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 	}
 }
 
-// argc, argv format required by SDL
-int main(int argc, char **argv)
-{
-	int jumpval;
-	if (argc < 2) {
-		fprintf(stderr, "Wrong number of arguments.\n"
-						"Usage:\n\tchip8 [path to rom]\n");
-		exit(EXIT_FAILURE);
-	}
-	signal(SIGINT, catch_exit);
-	signal(SIGTERM, catch_exit);
-	signal(SIGQUIT, catch_exit);
-	signal(SIGHUP, catch_exit);
-	SDL_Window *win = init_window();
-	chip8_vm vm = init_chip8();
-	load_rom(argv[1], &vm);
-	jumpval = setjmp(env);
-	if (!(jumpval))
-		main_loop(&vm, win);
-	SDL_DestroyWindow(win);
-	exit(EXIT_SUCCESS);
-}
