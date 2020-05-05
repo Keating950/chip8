@@ -8,7 +8,7 @@
 #define VX vm->v[(opcode & 0x0F00) >> 8]
 #define VY vm->v[(opcode & 0x00F0) >> 4]
 
-const uint8_t chip8_fontset[0x50] = {
+static const uint8_t font_set[] = {
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
 	0x20, 0x60, 0x20, 0x20, 0x70, // 1
 	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -34,16 +34,16 @@ chip8_vm init_chip8()
 		.mem = { 0 },
 		.v = { 0 },
 		.idx = 0,
-		.pc = 200,
+		.pc = 0xC8,
 		.stack = { 0 },
-		.sp = 15,
+		.sp = 0xF,
 		.screen = { 0 },
 		.delay_timer = 0,
 		.sound_timer = 0,
 		.keyboard = { 0 },
 		.draw_flag = 0,
 	};
-	memcpy(&vm.mem, chip8_fontset, 0x50);
+	memcpy(&vm.mem, font_set, LEN(font_set));
 	return vm;
 }
 
@@ -72,27 +72,30 @@ static void print_keys(chip8_vm *vm)
 	puts("\n");
 }
 
+#define VMPIXEL(X, Y) vm->screen[x + VX + (y + VY) * COLS]
 static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
 	int x, y;
-	uint8_t pixel;
+	uint8_t sprite_pixel;
 	int height = opcode & 0x000Fu;
 	vm->v[0xF] = 0;
 
 	for (y = 0; y < height && (y + height) < ROWS; y++) {
-		pixel = vm->mem[vm->idx + y];
+		if ((y + VY) > ROWS)
+			break;
+		sprite_pixel = vm->mem[vm->idx + y];
 		for (x = 0; x < 8; x++) {
-			//			if ((x + VX) > COLS)
-			//				break;
-			if (pixel & (0x80 >> x)) {
-				if (vm->screen[x + VX + (y + VY) * 64])
+			if ((x + VX) > COLS)
+				break;
+			if (sprite_pixel & (0x80 >> x)) {
+				if (VMPIXEL(x, y))
 					vm->v[0xF] = 1;
-				vm->screen[x + VX + (y + VY) * 64] ^= UINT32_MAX;
+				VMPIXEL(x, y) ^= UINT32_MAX;
 			}
 		}
 	}
-	NOP;
 }
+#undef VMPIXEL
 
 void vm_cycle(chip8_vm *vm)
 {
@@ -193,19 +196,18 @@ math:
 		VX ^= VY;
 		break;
 	case 0x4:
-		// 8XY4: Vx+=vy, carry-aware
-		vm->v[0xF] = (((uint32_t)VX + VY) > UINT8_MAX) ? 1 : 0;
+		// 8XY4: Vx+=Vy, carry-aware
+		vm->v[0xF] = ((uint32_t)VX + VY) > UINT8_MAX;
 		VX += VY;
 		break;
 	case 0x5:
 		// 8XY5: borrow-aware sub (n.b. VF set to !borrow)
-		vm->v[0xF] = (VX > VY) ? 1 : 0;
-		VX += VY;
+		vm->v[0xF] = VX > VY;
+		VX -= VY;
 		break;
 	case 0x6:
 		// 8XY6: euclidean division by two; set VF if remainder
-		// i.e. arithmetic right shift
-		// store lsb of Vx in VF
+		// i.e. arithmetic right shift, storing lsb of Vx in VF
 		vm->v[0xF] = VX & 1;
 		VX >>= 1;
 		break;
@@ -219,8 +221,7 @@ math:
 		break;
 	case 0xE:
 		// 8XYE: multiplication by two; set VF if remainder
-		// i.e. arithmetic left shift
-		// store msb in vf
+		// i.e. arithmetic left shift, storing msb in VF
 		vm->v[0xF] = VX & 0x80;
 		VX <<= 1;
 		break;
@@ -231,13 +232,11 @@ math:
 	return;
 reg_neq_reg:
 	// 9XY0: skip if Vx!=Vy
-	for (;;) {
-		if (VX != VY)
-			vm->pc += 4;
-		else
-			vm->pc += 2;
-		return;
-	}
+	if (VX != VY)
+		vm->pc += 4;
+	else
+		vm->pc += 2;
+	return;
 set_idx:
 	// ANNN
 	vm->idx = opcode & 0x0FFF;
