@@ -89,22 +89,48 @@ void draw_screen(const chip8_vm *vm, SDL_Window *win)
 	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
 }
 
-void update_vm_keyboard(chip8_vm *vm)
+int scancode_to_chip8(int scancode)
 {
-	const uint8_t *keyboard = SDL_GetKeyboardState(NULL);
-	if (!keyboard)
-		ERROR_EXIT("Failed to get keyboard state array");
-	uint8_t key_states[] = {
-		keyboard[SDL_SCANCODE_M], keyboard[SDL_SCANCODE_6],
-		keyboard[SDL_SCANCODE_7], keyboard[SDL_SCANCODE_8],
-		keyboard[SDL_SCANCODE_Y], keyboard[SDL_SCANCODE_U],
-		keyboard[SDL_SCANCODE_I], keyboard[SDL_SCANCODE_H],
-		keyboard[SDL_SCANCODE_J], keyboard[SDL_SCANCODE_K],
-		keyboard[SDL_SCANCODE_N], keyboard[SDL_SCANCODE_COMMA],
-		keyboard[SDL_SCANCODE_9], keyboard[SDL_SCANCODE_O],
-		keyboard[SDL_SCANCODE_L], keyboard[SDL_SCANCODE_PERIOD],
-	};
-	memcpy(vm->keyboard, &key_states, LEN(key_states));
+	switch (scancode) {
+	// 123C
+	case SDL_SCANCODE_6:
+		return 0x1;
+	case SDL_SCANCODE_7:
+		return 0x2;
+	case SDL_SCANCODE_8:
+		return 0x3;
+	case SDL_SCANCODE_9:
+		return 0xC;
+	// 456D
+	case SDL_SCANCODE_Y:
+		return 0x4;
+	case SDL_SCANCODE_U:
+		return 0x5;
+	case SDL_SCANCODE_I:
+		return 0x6;
+	case SDL_SCANCODE_O:
+		return 0xD;
+	// 789E
+	case SDL_SCANCODE_H:
+		return 0x7;
+	case SDL_SCANCODE_J:
+		return 0x8;
+	case SDL_SCANCODE_K:
+		return 0x9;
+	case SDL_SCANCODE_L:
+		return 0xE;
+	// A0BF
+	case SDL_SCANCODE_N:
+		return 0xA;
+	case SDL_SCANCODE_M:
+		return 0x0;
+	case SDL_SCANCODE_COMMA:
+		return 0xB;
+	case SDL_SCANCODE_PERIOD:
+		return 0xF;
+	default:
+		return -1;
+	}
 }
 
 void main_loop(chip8_vm *vm, SDL_Window *win)
@@ -121,11 +147,14 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 			switch (event.type) {
 			case SDL_QUIT:
 				return;
+			case SDL_KEYDOWN:
+				vm->keyboard[scancode_to_chip8(event.key.keysym.scancode)] = 0;
+			case SDL_KEYUP:
+				vm->keyboard[scancode_to_chip8(event.key.keysym.scancode)] = 0;
 			default:
 				continue;
 			}
 		}
-		update_vm_keyboard(vm);
 		vm_cycle(vm);
 		// TODO: add audio
 		if (vm->draw_flag) {

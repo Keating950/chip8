@@ -24,25 +24,16 @@ static const uint8_t font_set[] = {
 	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
 	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
 	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-	0xF0, 0x80, 0xF0, 0x80, 0x80 // F
+	0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 };
 
 chip8_vm init_chip8()
 {
 	srand(clock()); // for opcode requiring RNG
-	chip8_vm vm = {
-		.mem = { 0 },
-		.v = { 0 },
-		.idx = 0,
-		.pc = 0xC8,
-		.stack = { 0 },
-		.sp = 0xF,
-		.screen = { 0 },
-		.delay_timer = 0,
-		.sound_timer = 0,
-		.keyboard = { 0 },
-		.draw_flag = 0,
-	};
+	chip8_vm vm;
+	memset(&vm, 0, sizeof(chip8_vm));
+	vm.pc = 0xC8;
+	vm.sp = 0xF;
 	memcpy(&vm.mem, font_set, LEN(font_set));
 	return vm;
 }
@@ -117,8 +108,7 @@ zero_ops:
 	switch (opcode & 0x00FFu) {
 	case 0xE0:
 		// clear screen
-		for (int i = 0; i < ROWS; i++)
-			memset(vm->screen + i * ROWS, 0, COLS);
+		memset(vm->screen, 0, ROWS*COLS*sizeof(uint32_t));
 		vm->draw_flag = 1;
 		vm->pc += 2;
 		return;
