@@ -9,8 +9,11 @@
 #include "util.h"
 
 SDL_Window *init_window(void);
-void main_loop(chip8_vm *vm, SDL_Window *win);
+int init_audio(void);
+int scancode_to_chip8(int scancode);
 static void catch_exit(int signo);
+void draw_screen(const chip8_vm *vm, SDL_Window *win);
+void main_loop(chip8_vm *vm, SDL_Window *win);
 
 jmp_buf env;
 
@@ -35,6 +38,49 @@ int main(int argc, char **argv)
 		main_loop(&vm, win);
 	SDL_DestroyWindow(win);
 	exit(EXIT_SUCCESS);
+}
+
+void main_loop(chip8_vm *vm, SDL_Window *win)
+{
+	SDL_Event event;
+	struct timespec frame_start;
+	struct timespec frame_end;
+	struct timespec delay = { 0, 0 };
+	long delta;
+	long timers_last_decremented = 0;
+	while (1) {
+		clock_gettime(CLOCK_MONOTONIC, &frame_start);
+		while (SDL_PollEvent(&event)) {
+			switch (event.type) {
+			case SDL_QUIT:
+				return;
+			case SDL_KEYDOWN:
+				vm->keyboard[scancode_to_chip8(event.key.keysym.scancode)] = 1;
+				break;
+			case SDL_KEYUP:
+				vm->keyboard[scancode_to_chip8(event.key.keysym.scancode)] = 0;
+			default:
+				continue;
+			}
+		}
+		vm_cycle(vm);
+		// TODO: add audio
+		if (vm->draw_flag) {
+			draw_screen(vm, win);
+			SDL_UpdateWindowSurface(win);
+			vm->draw_flag = 0;
+		}
+		clock_gettime(CLOCK_MONOTONIC, &frame_end);
+		delta = ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
+		if (timers_last_decremented += delta >= TIMER_HZ_NS) {
+			vm->delay_timer = ZERO_FLOOR(vm->delay_timer - 1);
+			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
+			timers_last_decremented = 0;
+		}
+		delay.tv_nsec = ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
+		if (delay.tv_nsec)
+			nanosleep(&delay, NULL);
+	}
 }
 
 static void catch_exit(int signo)
@@ -93,84 +139,43 @@ int scancode_to_chip8(int scancode)
 {
 	switch (scancode) {
 	// 123C
-	case SDL_SCANCODE_6:
-		return 0x1;
-	case SDL_SCANCODE_7:
-		return 0x2;
-	case SDL_SCANCODE_8:
-		return 0x3;
-	case SDL_SCANCODE_9:
-		return 0xC;
-	// 456D
-	case SDL_SCANCODE_Y:
-		return 0x4;
-	case SDL_SCANCODE_U:
-		return 0x5;
-	case SDL_SCANCODE_I:
-		return 0x6;
-	case SDL_SCANCODE_O:
-		return 0xD;
-	// 789E
-	case SDL_SCANCODE_H:
-		return 0x7;
-	case SDL_SCANCODE_J:
-		return 0x8;
-	case SDL_SCANCODE_K:
-		return 0x9;
-	case SDL_SCANCODE_L:
-		return 0xE;
-	// A0BF
-	case SDL_SCANCODE_N:
-		return 0xA;
-	case SDL_SCANCODE_M:
+	case SDL_SCANCODE_X:
 		return 0x0;
-	case SDL_SCANCODE_COMMA:
+	case SDL_SCANCODE_1:
+		return 0x1;
+	case SDL_SCANCODE_2:
+		return 0x2;
+	case SDL_SCANCODE_3:
+		return 0x3;
+	case SDL_SCANCODE_Q:
+		return 0x4;
+	// 456D
+	case SDL_SCANCODE_W:
+		return 0x5;
+	case SDL_SCANCODE_E:
+		return 0x6;
+	case SDL_SCANCODE_A:
+		return 0x7;
+	case SDL_SCANCODE_S:
+		return 0x8;
+	// 789E
+	case SDL_SCANCODE_D:
+		return 0x9;
+	case SDL_SCANCODE_Z:
+		return 0xA;
+	case SDL_SCANCODE_C:
 		return 0xB;
-	case SDL_SCANCODE_PERIOD:
+	// A0BF
+	case SDL_SCANCODE_4:
+		return 0xC;
+	case SDL_SCANCODE_R:
+		return 0xD;
+	case SDL_SCANCODE_F:
+		return 0xE;
+	case SDL_SCANCODE_V:
 		return 0xF;
 	default:
 		return -1;
 	}
 }
 
-void main_loop(chip8_vm *vm, SDL_Window *win)
-{
-	SDL_Event event;
-	struct timespec frame_start;
-	struct timespec frame_end;
-	struct timespec delay = { 0, 0 };
-	long delta;
-	long timers_last_decremented = 0;
-	while (1) {
-		clock_gettime(CLOCK_MONOTONIC, &frame_start);
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			case SDL_QUIT:
-				return;
-			case SDL_KEYDOWN:
-				vm->keyboard[scancode_to_chip8(event.key.keysym.scancode)] = 0;
-			case SDL_KEYUP:
-				vm->keyboard[scancode_to_chip8(event.key.keysym.scancode)] = 0;
-			default:
-				continue;
-			}
-		}
-		vm_cycle(vm);
-		// TODO: add audio
-		if (vm->draw_flag) {
-			draw_screen(vm, win);
-			SDL_UpdateWindowSurface(win);
-			vm->draw_flag = 0;
-		}
-		clock_gettime(CLOCK_MONOTONIC, &frame_end);
-		delta = ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
-		if (timers_last_decremented += delta >= TIMER_HZ_NS) {
-			vm->delay_timer = ZERO_FLOOR(vm->delay_timer - 1);
-			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
-			timers_last_decremented = 0;
-		}
-		delay.tv_nsec = ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
-		if (delay.tv_nsec)
-			nanosleep(&delay, NULL);
-	}
-}
