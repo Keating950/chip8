@@ -8,12 +8,17 @@
 #include "chip8.h"
 #include "util.h"
 
+#define TIMER_HZ_NS 16666667 
+#define FRAME_NS 2000000 
+
 SDL_Window *init_window(void);
 int init_audio(void);
 int scancode_to_chip8(int scancode);
 static void catch_exit(int signo);
 void draw_screen(const chip8_vm *vm, SDL_Window *win);
 void main_loop(chip8_vm *vm, SDL_Window *win);
+static inline void difftime_ns(const struct timespec *then, 
+		const struct timespec *now, struct timespec *result);
 
 jmp_buf env;
 
@@ -46,8 +51,10 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 	struct timespec frame_start;
 	struct timespec frame_end;
 	struct timespec delay = { 0, 0 };
-	long delta;
-	long timers_last_decremented = 0;
+	int cycles_since_timer_tick;
+	int key;
+	int key_pressed = 0;
+	
 	while (1) {
 		clock_gettime(CLOCK_MONOTONIC, &frame_start);
 		while (SDL_PollEvent(&event)) {
@@ -55,32 +62,46 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 			case SDL_QUIT:
 				return;
 			case SDL_KEYDOWN:
-				vm->keyboard[scancode_to_chip8(event.key.keysym.scancode)] = 1;
-				break;
-			case SDL_KEYUP:
-				vm->keyboard[scancode_to_chip8(event.key.keysym.scancode)] = 0;
+				key_pressed = 1;
+			case SDL_KEYUP: {
+				key = scancode_to_chip8(event.key.keysym.scancode);
+				vm->keyboard[key] = !vm->keyboard[key];
+			}
 			default:
 				continue;
 			}
 		}
-		vm_cycle(vm);
+		vm_cycle(vm, key_pressed);
+		key_pressed = 0;
 		// TODO: add audio
 		if (vm->draw_flag) {
 			draw_screen(vm, win);
 			SDL_UpdateWindowSurface(win);
 			vm->draw_flag = 0;
 		}
-		clock_gettime(CLOCK_MONOTONIC, &frame_end);
-		delta = ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
-		if (timers_last_decremented += delta >= TIMER_HZ_NS) {
-			vm->delay_timer = ZERO_FLOOR(vm->delay_timer - 1);
-			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
-			timers_last_decremented = 0;
+
+		if (++cycles_since_timer_tick==8) {
+			vm->delay_timer = ZERO_FLOOR(vm->delay_timer-1);
+			vm->sound_timer = ZERO_FLOOR(vm->sound_timer-1);
+			cycles_since_timer_tick=0;
 		}
-		delay.tv_nsec = ZERO_FLOOR(frame_end.tv_nsec - frame_start.tv_nsec);
+		
+		clock_gettime(CLOCK_MONOTONIC, &frame_end);
+		difftime_ns(&frame_start, &frame_end, &delay);
 		if (delay.tv_nsec)
 			nanosleep(&delay, NULL);
 	}
+}
+
+static inline void 
+difftime_ns(const struct timespec *then, const struct timespec *now, 
+		struct timespec *result)
+{
+    if ((now->tv_nsec - then->tv_nsec) < 0) {
+        result->tv_nsec = now->tv_nsec - then->tv_nsec + 1000000000;
+    } else {
+        result->tv_nsec = now->tv_nsec - then->tv_nsec;
+    }
 }
 
 static void catch_exit(int signo)
@@ -127,12 +148,13 @@ int init_audio(void)
 	return id;
 }
 
+
 void draw_screen(const chip8_vm *vm, SDL_Window *win)
 {
-	SDL_Surface *screen = SDL_CreateRGBSurfaceWithFormatFrom(
-		(void *)vm->screen, SCREEN_WIDTH, SCREEN_HEIGHT, 24, // bit depth
-		SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
-	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
+SDL_Surface *screen = SDL_CreateRGBSurfaceWithFormatFrom(
+	(void *)vm->screen, SCREEN_WIDTH, SCREEN_HEIGHT, 24, // bit depth
+	SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
+SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
 }
 
 int scancode_to_chip8(int scancode)

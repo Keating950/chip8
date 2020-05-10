@@ -88,7 +88,7 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 }
 #undef VMPIXEL
 
-void vm_cycle(chip8_vm *vm)
+void vm_cycle(chip8_vm *vm, int key_pressed)
 {
 	const unsigned short opcode = vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
 	static const void *opcode_handles[] = {
@@ -275,6 +275,8 @@ fxxx_ops:
 	case 0x0A:
 		// FX0A: Blocking I/O
 		// frames continue but pc doesnt advance until a key is pressed
+		if (!key_pressed)
+			return;
 		for (size_t i = 0; i < LEN(vm->keyboard); i++) {
 			if (vm->keyboard[i]) {
 				VX = i;

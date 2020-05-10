@@ -11,4 +11,3 @@
 
 #define SCREEN_WIDTH 0x40
 #define SCREEN_HEIGHT 0x20
-#define TIMER_HZ_NS 16666667

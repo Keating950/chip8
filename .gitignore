@@ -9,6 +9,7 @@ build
 compile_commands.json
 tags
 chip8
+cmake-build-debug
 
 # Created by .ignore support plugin (hsz.mobi)
 ### C++ template
@@ -44,5 +45,3 @@ chip8
 *.exe
 *.out
 *.app
-
-/cmake-build-debug/
