@@ -1,3 +1,4 @@
+#define _BSD_SOURCE
 #include <SDL.h>
 #include <SDL_video.h>
 #include <setjmp.h>
@@ -8,9 +9,12 @@
 #include "chip8.h"
 #include "util.h"
 
-#define TIMER_HZ_NS 16666667 
-#define FRAME_NS 2000000 
-#define OPS_PER_FRAME 
+#define TIMER_HZ_NS 16666667
+#define FRAME_NS 2000000
+#define OPS_PER_FRAME 8
+
+#define SCREEN_WIDTH 0x40
+#define SCREEN_HEIGHT 0x20
 
 static void init_window(void);
 void destroy_window(void);
@@ -18,12 +22,11 @@ int init_audio(void);
 int scancode_to_chip8(int scancode);
 void draw_screen(const chip8_vm *vm);
 void main_loop(chip8_vm *vm);
-static inline void difftime_ns(const struct timespec *then, 
-		const struct timespec *now, struct timespec *result);
-
+static inline void difftime_ns(const struct timespec *then,
+							   const struct timespec *now,
+							   struct timespec *result);
 
 static SDL_Window *win = NULL;
-
 
 // argc, argv format required by SDL
 int main(int argc, char **argv)
@@ -42,7 +45,6 @@ int main(int argc, char **argv)
 	exit(EXIT_SUCCESS);
 }
 
-
 void main_loop(chip8_vm *vm)
 {
 	SDL_Event event;
@@ -52,7 +54,8 @@ void main_loop(chip8_vm *vm)
 	int ops_since_draw = 0;
 	int key;
 	int key_pressed = 0;
-	
+	int delta;
+
 	while (1) {
 		if (!ops_since_draw)
 			clock_gettime(CLOCK_MONOTONIC, &frame_start);
@@ -60,7 +63,7 @@ void main_loop(chip8_vm *vm)
 			switch (event.type) {
 			case SDL_QUIT:
 				return;
-			case SDL_KEYDOWN:	// FALLTHROUGH
+			case SDL_KEYDOWN: // FALLTHROUGH
 				key_pressed = 1;
 			case SDL_KEYUP:
 				key = scancode_to_chip8(event.key.keysym.scancode);
@@ -73,18 +76,18 @@ void main_loop(chip8_vm *vm)
 		key_pressed = 0;
 		// TODO: add audio
 
-		if (++ops_since_draw==8) {
+		if (ops_since_draw++ == OPS_PER_FRAME) {
 			ops_since_draw = 0;
-			vm->delay_timer = ZERO_FLOOR(vm->delay_timer-1);
-			vm->sound_timer = ZERO_FLOOR(vm->sound_timer-1);
+			vm->delay_timer = ZERO_FLOOR(vm->delay_timer - 1);
+			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
 			SDL_UpdateWindowSurface(win);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
 			difftime_ns(&frame_start, &frame_end, &delay);
-			if (delay.tv_sec || delay.tv_nsec)
-				nanosleep(&delay, NULL);
+			delta = (TIMER_HZ_NS - delay.tv_nsec) / 1000;
+			if (ZERO_FLOOR(delta))
+				usleep(delta);
 		}
-		
 	}
 }
 
@@ -94,15 +97,15 @@ void destroy_window(void)
 		SDL_DestroyWindow(win);
 }
 
-static inline void 
-difftime_ns(const struct timespec *then, const struct timespec *now, 
-		struct timespec *result)
+static inline void difftime_ns(const struct timespec *then,
+							   const struct timespec *now,
+							   struct timespec *result)
 {
-    if ((now->tv_nsec - then->tv_nsec) < 0) {
-        result->tv_nsec = now->tv_nsec - then->tv_nsec + 1000000000;
-    } else {
-        result->tv_nsec = now->tv_nsec - then->tv_nsec;
-    }
+	if ((now->tv_nsec - then->tv_nsec) < 0) {
+		result->tv_nsec = now->tv_nsec - then->tv_nsec + 1000000000;
+	} else {
+		result->tv_nsec = now->tv_nsec - then->tv_nsec;
+	}
 }
 
 void draw_screen(const chip8_vm *vm)
@@ -111,6 +114,7 @@ void draw_screen(const chip8_vm *vm)
 		(void *)vm->screen, SCREEN_WIDTH, SCREEN_HEIGHT, 24, // bit depth
 		SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
 	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
+	SDL_FreeSurface(screen);
 }
 
 int init_audio(void)
@@ -133,8 +137,8 @@ static void init_window(void)
 	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
 		ERROR_EXIT("Could not initialize SDL");
 	win = SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
-						 SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
-						 SDL_WINDOW_SHOWN);
+						   SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
+						   SDL_WINDOW_SHOWN);
 	if (!(win))
 		ERROR_EXIT("Failed to create window");
 	SDL_Surface *surf = SDL_GetWindowSurface(win);
@@ -187,4 +191,3 @@ int scancode_to_chip8(int scancode)
 		return -1;
 	}
 }
-

@@ -8,6 +8,3 @@
 #define NOP (void)0
 
 #define ZERO_FLOOR(N) ((N) > 0 ? (N) : 0)
-
-#define SCREEN_WIDTH 0x40
-#define SCREEN_HEIGHT 0x20
