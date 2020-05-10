@@ -16,7 +16,6 @@ typedef struct CHIP8_VM_T {
 	int delay_timer;
 	int sound_timer; // both 60hz
 	int keyboard[0x10];
-	int draw_flag;
 } chip8_vm;
 
 chip8_vm init_chip8();

@@ -55,14 +55,6 @@ void load_rom(const char *path, chip8_vm *vm)
 		ERROR_EXIT("Error reading file");
 }
 
-static void print_keys(chip8_vm *vm)
-{
-	printf("[%c] ", vm->keyboard[0] ? '.' : '0');
-	for (int i = 1; i < 0xF; i++)
-		printf("[%x] ", vm->keyboard[i] ? i : 0);
-	puts("\n");
-}
-
 #define VMPIXEL(X, Y) vm->screen[x + VX + (y + VY) * COLS]
 static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
@@ -109,7 +101,6 @@ zero_ops:
 	case 0xE0:
 		// clear screen
 		memset(vm->screen, 0, ROWS*COLS*sizeof(uint32_t));
-		vm->draw_flag = 1;
 		vm->pc += 2;
 		return;
 	case 0xEE:
@@ -242,7 +233,6 @@ random_and:
 	vm->pc += 2;
 	return;
 draw:
-	vm->draw_flag = 1;
 	draw_sprite(vm, opcode);
 	vm->pc += 2;
 	return;

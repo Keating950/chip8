@@ -10,63 +10,61 @@
 
 #define TIMER_HZ_NS 16666667 
 #define FRAME_NS 2000000 
+#define OPS_PER_FRAME 
 
-SDL_Window *init_window(void);
+static void init_window(void);
+void destroy_window(void);
 int init_audio(void);
 int scancode_to_chip8(int scancode);
-static void catch_exit(int signo);
-void draw_screen(const chip8_vm *vm, SDL_Window *win);
-void main_loop(chip8_vm *vm, SDL_Window *win);
+void draw_screen(const chip8_vm *vm);
+void main_loop(chip8_vm *vm);
 static inline void difftime_ns(const struct timespec *then, 
 		const struct timespec *now, struct timespec *result);
 
-jmp_buf env;
+
+static SDL_Window *win = NULL;
+
 
 // argc, argv format required by SDL
 int main(int argc, char **argv)
 {
-	int jumpval;
 	if (argc < 2) {
 		fprintf(stderr, "Wrong number of arguments.\n"
 						"Usage:\n\tchip8 [path to rom]\n");
 		exit(EXIT_FAILURE);
 	}
-	signal(SIGINT, catch_exit);
-	signal(SIGTERM, catch_exit);
-	signal(SIGQUIT, catch_exit);
-	signal(SIGHUP, catch_exit);
-	SDL_Window *win = init_window();
+	init_window();
+	atexit(destroy_window);
 	chip8_vm vm = init_chip8();
 	load_rom(argv[1], &vm);
-	jumpval = setjmp(env);
-	if (!(jumpval))
-		main_loop(&vm, win);
+	main_loop(&vm);
 	SDL_DestroyWindow(win);
 	exit(EXIT_SUCCESS);
 }
 
-void main_loop(chip8_vm *vm, SDL_Window *win)
+
+void main_loop(chip8_vm *vm)
 {
 	SDL_Event event;
 	struct timespec frame_start;
 	struct timespec frame_end;
 	struct timespec delay = { 0, 0 };
-	int cycles_since_timer_tick;
+	int ops_since_draw = 0;
 	int key;
 	int key_pressed = 0;
 	
 	while (1) {
-		clock_gettime(CLOCK_MONOTONIC, &frame_start);
+		if (!ops_since_draw)
+			clock_gettime(CLOCK_MONOTONIC, &frame_start);
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			case SDL_QUIT:
 				return;
-			case SDL_KEYDOWN:
+			case SDL_KEYDOWN:	// FALLTHROUGH
 				key_pressed = 1;
-			case SDL_KEYUP: {
+			case SDL_KEYUP:
 				key = scancode_to_chip8(event.key.keysym.scancode);
 				vm->keyboard[key] = !vm->keyboard[key];
-			}
 			default:
 				continue;
 			}
@@ -74,23 +72,26 @@ void main_loop(chip8_vm *vm, SDL_Window *win)
 		vm_cycle(vm, key_pressed);
 		key_pressed = 0;
 		// TODO: add audio
-		if (vm->draw_flag) {
-			draw_screen(vm, win);
-			SDL_UpdateWindowSurface(win);
-			vm->draw_flag = 0;
-		}
 
-		if (++cycles_since_timer_tick==8) {
+		if (++ops_since_draw==8) {
+			ops_since_draw = 0;
 			vm->delay_timer = ZERO_FLOOR(vm->delay_timer-1);
 			vm->sound_timer = ZERO_FLOOR(vm->sound_timer-1);
-			cycles_since_timer_tick=0;
+			draw_screen(vm);
+			SDL_UpdateWindowSurface(win);
+			clock_gettime(CLOCK_MONOTONIC, &frame_end);
+			difftime_ns(&frame_start, &frame_end, &delay);
+			if (delay.tv_sec || delay.tv_nsec)
+				nanosleep(&delay, NULL);
 		}
 		
-		clock_gettime(CLOCK_MONOTONIC, &frame_end);
-		difftime_ns(&frame_start, &frame_end, &delay);
-		if (delay.tv_nsec)
-			nanosleep(&delay, NULL);
 	}
+}
+
+void destroy_window(void)
+{
+	if (win)
+		SDL_DestroyWindow(win);
 }
 
 static inline void 
@@ -104,33 +105,12 @@ difftime_ns(const struct timespec *then, const struct timespec *now,
     }
 }
 
-static void catch_exit(int signo)
+void draw_screen(const chip8_vm *vm)
 {
-	switch (signo) {
-	case SIGINT:
-	case SIGTERM:
-	case SIGQUIT:
-	case SIGHUP:
-		longjmp(env, 1);
-	}
-}
-
-SDL_Window *init_window(void)
-{
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
-		ERROR_EXIT("Could not initialize SDL");
-	SDL_Window *win =
-		SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
-						 SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
-						 SDL_WINDOW_SHOWN);
-	if (!(win))
-		ERROR_EXIT("Failed to create window");
-	SDL_Surface *surf = SDL_GetWindowSurface(win);
-	if (!(surf))
-		ERROR_EXIT("Failed to create SDL surface");
-	SDL_FillRect(surf, NULL, SDL_MapRGB(surf->format, 0, 0, 0));
-	SDL_UpdateWindowSurface(win);
-	return win;
+	SDL_Surface *screen = SDL_CreateRGBSurfaceWithFormatFrom(
+		(void *)vm->screen, SCREEN_WIDTH, SCREEN_HEIGHT, 24, // bit depth
+		SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
+	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
 }
 
 int init_audio(void)
@@ -148,13 +128,20 @@ int init_audio(void)
 	return id;
 }
 
-
-void draw_screen(const chip8_vm *vm, SDL_Window *win)
+static void init_window(void)
 {
-SDL_Surface *screen = SDL_CreateRGBSurfaceWithFormatFrom(
-	(void *)vm->screen, SCREEN_WIDTH, SCREEN_HEIGHT, 24, // bit depth
-	SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
-SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
+	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
+		ERROR_EXIT("Could not initialize SDL");
+	win = SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
+						 SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
+						 SDL_WINDOW_SHOWN);
+	if (!(win))
+		ERROR_EXIT("Failed to create window");
+	SDL_Surface *surf = SDL_GetWindowSurface(win);
+	if (!(surf))
+		ERROR_EXIT("Failed to create SDL surface");
+	SDL_FillRect(surf, NULL, SDL_MapRGB(surf->format, 0, 0, 0));
+	SDL_UpdateWindowSurface(win);
 }
 
 int scancode_to_chip8(int scancode)
