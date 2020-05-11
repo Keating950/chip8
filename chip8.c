@@ -47,8 +47,10 @@ void load_rom(const char *path, chip8_vm *vm)
 		ERROR_EXIT("Failed to open file");
 	fseek(f, 0, SEEK_END);
 	rom_size = ftell(f);
-	if (rom_size > 0x800)
-		ERROR_EXIT("Rom is too large");
+	if (rom_size > 0x800) {
+		fputs("Rom is too large\n", stderr);
+		exit(EXIT_FAILURE);
+	}
 	rewind(f);
 	bytes_read = fread((vm->mem + 0x200), sizeof(uint8_t), rom_size, f);
 	if (bytes_read != rom_size)
