@@ -1,3 +1,6 @@
+#ifdef __APPLE__
+	#include <sys/cdefs.h>
+#endif
 #define _BSD_SOURCE
 #include <SDL.h>
 #include <SDL_video.h>
