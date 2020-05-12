@@ -99,7 +99,7 @@ void vm_cycle(chip8_vm *vm, int key_pressed)
 zero_ops:
 	switch (opcode & 0x00FFu) {
 	case 0xE0:
-		// clear screen
+		// Clear screen
 		memset(vm->screen, 0, ROWS*COLS*sizeof(uint32_t));
 		vm->pc += 2;
 		return;
@@ -108,60 +108,60 @@ zero_ops:
 		if (vm->sp < 15)
 			vm->pc = vm->stack[vm->sp++] + 2;
 		else
-			ERROR_EXIT("Attempted pop from empty VM Stack\n");
+			ERROR_EXIT("Attempted pop from empty VM Stack");
 		return;
 	default:
-		// 0NNN: deprecated instruction
+		// 0NNN: Deprecated instruction
 		vm->pc += 2;
 		return;
 	}
 jump:
-	// 1NNN: jump (don't store pc)
+	// 1NNN: Jump without storing pc
 	vm->pc = opcode & 0x0FFFu;
 	return;
 jump_and_link:
-	// 2NNN: call subroutine (store pc)
+	// 2NNN: Call subroutine, storing pc
 	if (vm->sp > 0)
 		vm->stack[--vm->sp] = vm->pc;
 	else
-		ERROR_EXIT("Attempted push to full VM Stack\n");
+		ERROR_EXIT("Attempted push to full VM Stack");
 	vm->pc = opcode & 0x0FFFu;
 	return;
 reg_eq_im:
-	// 3XNN: skip next instruction if Vx==NN
+	// 3XNN: Skip next instruction if Vx==NN
 	if ((VX) == (opcode & 0xFF))
 		vm->pc += 4;
 	else
 		vm->pc += 2;
 	return;
 reg_neq_im:
-	// 4XNN: skip next instruction if reg!=00NN
+	// 4XNN: Skip next instruction if reg!=00NN
 	if ((VX) != (opcode & 0xFF))
 		vm->pc += 4;
 	else
 		vm->pc += 2;
 	return;
 reg_eq_reg:
-	// 5XY0: skip next instruction if Vx==Vy
+	// 5XY0: Skip next instruction if Vx==Vy
 	if (VX == VY)
 		vm->pc += 4;
 	else
 		vm->pc += 2;
 	return;
 load_halfword:
-	// 6XNN: set Vx to 00NN
+	// 6XNN: Set Vx to 00NN.
 	VX = (uint8_t)opcode & 0x00FFu;
 	vm->pc += 2;
 	return;
 add_halfword:
-	// 7XNN: add 00NN to Vx without affecting carry.
+	// 7XNN: Add 00NN to Vx without affecting carry.
 	VX += (uint8_t)opcode & 0x00FFu;
 	vm->pc += 2;
 	return;
 math:
 	switch (opcode & 0x000Fu) {
 	case 0x0:
-		// 8XY0: set Vx=Vy
+		// 8XY0: Vx = Vy
 		VX = VY;
 		break;
 	case 0x1:
@@ -182,13 +182,13 @@ math:
 		VX += VY;
 		break;
 	case 0x5:
-		// 8XY5: borrow-aware sub (n.b. VF set to !borrow)
+		// 8XY5: Borrow-aware sub. NB: VF set to !borrow
 		vm->v[0xF] = VX > VY;
 		VX -= VY;
 		break;
 	case 0x6:
-		// 8XY6: euclidean division by two; set VF if remainder
-		// i.e. arithmetic right shift, storing lsb of Vx in VF
+		// 8XY6: Euclidean division by two; set VF if remainder
+		// I.e. arithmetic right shift, storing LSB in VF
 		vm->v[0xF] = VX & 1;
 		VX >>= 1;
 		break;
@@ -201,8 +201,8 @@ math:
 		} while (0);
 		break;
 	case 0xE:
-		// 8XYE: multiplication by two; set VF if remainder
-		// i.e. arithmetic left shift, storing msb in VF
+		// 8XYE: Multiplication by two; set VF if remainder
+		// I.e. arithmetic left shift, storing MSB in VF
 		vm->v[0xF] = VX & 0x80;
 		VX <<= 1;
 		break;
@@ -212,7 +212,7 @@ math:
 	vm->pc += 2;
 	return;
 reg_neq_reg:
-	// 9XY0: skip if Vx!=Vy
+	// 9XY0: Skip if Vx!=Vy
 	if (VX != VY)
 		vm->pc += 4;
 	else
@@ -228,7 +228,7 @@ jump_idx_plus_reg:
 	vm->pc = vm->v[0] + (opcode & 0x0FFF);
 	return;
 random_and:
-	// CXNN: set Vx to NN & random number 0-225
+	// CXNN: Set Vx to NN & random number 0-225
 	VX = (opcode & 0x00FF) & (rand() % 255);
 	vm->pc += 2;
 	return;
@@ -264,7 +264,8 @@ fxxx_ops:
 		break;
 	case 0x0A:
 		// FX0A: Blocking I/O
-		// frames continue but pc doesnt advance until a key is pressed
+		// Frames continue, but the pc doesn't advance until
+                // a key is pressed
 		if (!key_pressed)
 			return;
 		for (size_t i = 0; i < LEN(vm->keyboard); i++) {
@@ -286,13 +287,13 @@ fxxx_ops:
 		vm->pc += 2;
 		break;
 	case 0x1E:
-		// FX1E: add Vx to idx. Set 0xF if there is overflow.
+		// FX1E: Add Vx to idx. Set 0xF if there is overflow.
 		vm->v[0xF] = (((uint32_t)VX + vm->idx) > UINT16_MAX) ? 1 : 0;
 		vm->idx += VX;
 		vm->pc += 2;
 		break;
 	case 0x29:
-		// FX29: set idx to location char in Vx's sprite
+		// FX29: Set idx to location char in Vx's sprite
 		vm->idx = VX * 5u;
 		vm->pc += 2;
 		break;
@@ -304,7 +305,7 @@ fxxx_ops:
 		vm->pc += 2;
 		break;
 	case 0x55:
-		// FX55: register dump: stores V0 through VX in memory,
+		// FX55: Register dump. Stores V0 through VX in memory,
 		// starting at idx
 		for (size_t i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
 			vm->mem[(vm->idx) + i] = vm->v[i];
@@ -312,7 +313,7 @@ fxxx_ops:
 		vm->pc += 2;
 		break;
 	case 0x65:
-		// FX55: register load: loads V0 through VX from memory,
+		// FX55: Register load. Loads V0 through VX from memory,
 		// starting from idx
 		for (size_t i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
 			vm->v[i] = vm->mem[(vm->idx) + i];
