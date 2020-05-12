@@ -70,7 +70,8 @@ void main_loop(chip8_vm *vm)
 				key_pressed = 1;
 			case SDL_KEYUP:
 				key = scancode_to_chip8(event.key.keysym.scancode);
-				vm->keyboard[key] = !vm->keyboard[key];
+				if (key > 0)
+					vm->keyboard[key] = !vm->keyboard[key];
 			default:
 				continue;
 			}

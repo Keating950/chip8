@@ -91,7 +91,7 @@ void vm_cycle(chip8_vm *vm, int key_pressed)
 		&&math,		  &&reg_neq_reg, &&set_idx,		  &&jump_idx_plus_reg,
 		&&random_and, &&draw,		 &&exxx_keyops,	  &&fxxx_ops,
 	};
-	if (opcode_handles[(opcode & 0xF000u) >> 12])
+	if (((opcode & 0xF000u) >> 12) < LEN(opcode_handles))
 		goto *opcode_handles[(opcode & 0xF000u) >> 12];
 	else {
 		fprintf(stderr, "Error: Unknown opcode %#X\n", opcode);
