@@ -22,7 +22,7 @@
 static void init_window(void);
 void destroy_window(void);
 int init_audio(void);
-int scancode_to_chip8(int scancode);
+void update_vm_keyboard(chip8_vm *vm);
 void draw_screen(const chip8_vm *vm);
 void main_loop(chip8_vm *vm);
 static inline void difftime_ns(const struct timespec *then,
@@ -55,7 +55,6 @@ void main_loop(chip8_vm *vm)
 	struct timespec frame_end;
 	struct timespec delay = { 0, 0 };
 	int ops_since_draw = 0;
-	int key;
 	int key_pressed = 0;
 	int delta;
 
@@ -69,9 +68,7 @@ void main_loop(chip8_vm *vm)
 			case SDL_KEYDOWN: // FALLTHROUGH
 				key_pressed = 1;
 			case SDL_KEYUP:
-				key = scancode_to_chip8(event.key.keysym.scancode);
-				if (key > 0)
-					vm->keyboard[key] = !vm->keyboard[key];
+				update_vm_keyboard(vm);
 			default:
 				continue;
 			}
@@ -152,46 +149,23 @@ static void init_window(void)
 	SDL_UpdateWindowSurface(win);
 }
 
-int scancode_to_chip8(int scancode)
+void update_vm_keyboard(chip8_vm *vm)
 {
-	switch (scancode) {
-	// 123C
-	case SDL_SCANCODE_X:
-		return 0x0;
-	case SDL_SCANCODE_1:
-		return 0x1;
-	case SDL_SCANCODE_2:
-		return 0x2;
-	case SDL_SCANCODE_3:
-		return 0x3;
-	case SDL_SCANCODE_Q:
-		return 0x4;
-	// 456D
-	case SDL_SCANCODE_W:
-		return 0x5;
-	case SDL_SCANCODE_E:
-		return 0x6;
-	case SDL_SCANCODE_A:
-		return 0x7;
-	case SDL_SCANCODE_S:
-		return 0x8;
-	// 789E
-	case SDL_SCANCODE_D:
-		return 0x9;
-	case SDL_SCANCODE_Z:
-		return 0xA;
-	case SDL_SCANCODE_C:
-		return 0xB;
-	// A0BF
-	case SDL_SCANCODE_4:
-		return 0xC;
-	case SDL_SCANCODE_R:
-		return 0xD;
-	case SDL_SCANCODE_F:
-		return 0xE;
-	case SDL_SCANCODE_V:
-		return 0xF;
-	default:
-		return -1;
-	}
+	const uint8_t *kbd_state = SDL_GetKeyboardState(NULL);
+	vm->keyboard[0x0] = kbd_state[SDL_SCANCODE_X];
+	vm->keyboard[0x1] = kbd_state[SDL_SCANCODE_1];
+	vm->keyboard[0x2] = kbd_state[SDL_SCANCODE_2];
+	vm->keyboard[0x3] = kbd_state[SDL_SCANCODE_3];
+	vm->keyboard[0x4] = kbd_state[SDL_SCANCODE_Q];
+	vm->keyboard[0x5] = kbd_state[SDL_SCANCODE_W];
+	vm->keyboard[0x6] = kbd_state[SDL_SCANCODE_E];
+	vm->keyboard[0x7] = kbd_state[SDL_SCANCODE_A];
+	vm->keyboard[0x8] = kbd_state[SDL_SCANCODE_S];
+	vm->keyboard[0x9] = kbd_state[SDL_SCANCODE_D];
+	vm->keyboard[0xA] = kbd_state[SDL_SCANCODE_Z];
+	vm->keyboard[0xB] = kbd_state[SDL_SCANCODE_C];
+	vm->keyboard[0xC] = kbd_state[SDL_SCANCODE_4];
+	vm->keyboard[0xD] = kbd_state[SDL_SCANCODE_R];
+	vm->keyboard[0xE] = kbd_state[SDL_SCANCODE_F];
+	vm->keyboard[0xF] = kbd_state[SDL_SCANCODE_V];
 }
