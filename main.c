@@ -1,5 +1,5 @@
 #ifdef __APPLE__
-	#include <sys/cdefs.h>
+#include <sys/cdefs.h>
 #endif
 #define _BSD_SOURCE
 #include <SDL.h>
@@ -26,8 +26,8 @@ int scancode_to_chip8(int scancode);
 void draw_screen(const chip8_vm *vm);
 void main_loop(chip8_vm *vm);
 static inline void difftime_ns(const struct timespec *then,
-							   const struct timespec *now,
-							   struct timespec *result);
+			   const struct timespec *now,
+			   struct timespec *result);
 
 static SDL_Window *win = NULL;
 
@@ -70,7 +70,8 @@ void main_loop(chip8_vm *vm)
 				key_pressed = 1;
 			case SDL_KEYUP:
 				key = scancode_to_chip8(event.key.keysym.scancode);
-				vm->keyboard[key] = !vm->keyboard[key];
+				if (key > 0)
+					vm->keyboard[key] = !vm->keyboard[key];
 			default:
 				continue;
 			}
