@@ -1,5 +1,5 @@
 #ifdef __APPLE__
-#include <sys/cdefs.h>
+    #include <sys/cdefs.h>
 #endif
 #define _BSD_SOURCE
 #include <SDL.h>
@@ -21,13 +21,12 @@
 
 static void init_window(void);
 void destroy_window(void);
-int init_audio(void);
 int scancode_to_chip8(int scancode);
 void draw_screen(const chip8_vm *vm);
 void main_loop(chip8_vm *vm);
 static inline void difftime_ns(const struct timespec *then,
-			   const struct timespec *now,
-			   struct timespec *result);
+                                const struct timespec *now,
+                                struct timespec *result);
 
 static SDL_Window *win = NULL;
 
@@ -36,7 +35,8 @@ int main(int argc, char **argv)
 {
 	if (argc < 2) {
 		fprintf(stderr, "Wrong number of arguments.\n"
-						"Usage:\n\tchip8 [path to rom]\n");
+				"Usage:\n\t%s [path to rom]\n",
+                                argv[0]);
 		exit(EXIT_FAILURE);
 	}
 	init_window();
@@ -78,7 +78,6 @@ void main_loop(chip8_vm *vm)
 		}
 		vm_cycle(vm, key_pressed);
 		key_pressed = 0;
-		// TODO: add audio
 
 		if (ops_since_draw++ == OPS_PER_FRAME) {
 			ops_since_draw = 0;
@@ -102,8 +101,8 @@ void destroy_window(void)
 }
 
 static inline void difftime_ns(const struct timespec *then,
-							   const struct timespec *now,
-							   struct timespec *result)
+                                const struct timespec *now,
+                                struct timespec *result)
 {
 	if ((now->tv_nsec - then->tv_nsec) < 0) {
 		result->tv_nsec = now->tv_nsec - then->tv_nsec + 1000000000;
@@ -119,21 +118,6 @@ void draw_screen(const chip8_vm *vm)
 		SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
 	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
 	SDL_FreeSurface(screen);
-}
-
-int init_audio(void)
-{
-	SDL_AudioSpec spec, act_spec;
-	SDL_zero(spec);
-	spec.freq = 48000;
-	spec.format = AUDIO_S16SYS;
-	spec.channels = 1;
-	spec.samples = 4096;
-	int id = SDL_OpenAudioDevice(NULL, 0, &spec, &act_spec,
-								 SDL_AUDIO_ALLOW_ANY_CHANGE);
-	if (id <= 0)
-		ERROR_EXIT(SDL_GetError());
-	return id;
 }
 
 static void init_window(void)
