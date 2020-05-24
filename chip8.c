@@ -73,7 +73,7 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 			if ((x + VX) > COLS)
 				break;
 			if (sprite_pixel & (0x80 >> x)) {
-				if (VMPIXEL(x, y))
+				if (VMPIXEL((x+VX), (y+VY)))
 					vm->v[0xF] = 1;
 				VMPIXEL((x+VX), (y+VY)) ^= UINT32_MAX;
 			}
