@@ -57,7 +57,7 @@ void load_rom(const char *path, chip8_vm *vm)
 		ERROR_EXIT("Error reading file");
 }
 
-#define VMPIXEL(X, Y) vm->screen[x + VX + (y + VY) * COLS]
+#define VMPIXEL(X, Y) vm->screen[Y * COLS + X]
 static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
 	int x, y;
@@ -75,7 +75,7 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 			if (sprite_pixel & (0x80 >> x)) {
 				if (VMPIXEL(x, y))
 					vm->v[0xF] = 1;
-				VMPIXEL(x, y) ^= UINT32_MAX;
+				VMPIXEL((x+VX), (y+VY)) ^= UINT32_MAX;
 			}
 		}
 	}
