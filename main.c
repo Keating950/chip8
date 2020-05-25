@@ -15,8 +15,9 @@
 #define TIMER_HZ_NS 16666667
 #define FRAME_NS 2000000
 #define OPS_PER_FRAME 8
-#define SCREEN_WIDTH 0x40
-#define SCREEN_HEIGHT 0x20
+#define SCALE 10 
+#define SCREEN_WIDTH 0x40 * SCALE
+#define SCREEN_HEIGHT 0x20 * SCALE
 
 void sdl_cleanup(void);
 static inline void difftime_ns(const struct timespec *then,
@@ -115,14 +116,16 @@ static inline void difftime_ns(const struct timespec *then,
 
 void draw_screen(const chip8_vm *vm)
 {
+	static const SDL_Rect dest = {.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT};
+	static const SDL_Rect src =	{.x = 0, .y = 0, .w = 0x40, .h = 0x20};
 	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
 	if (SDL_RenderClear(renderer))
 		goto cleanup;
-	if (SDL_UpdateTexture(vm_texture, NULL, (void *)vm->screen,
-						  SCREEN_WIDTH * sizeof(uint32_t)))
+	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen,
+						  0x40 * sizeof(uint32_t)))
 		goto cleanup;
 	SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-	SDL_RenderCopy(renderer, vm_texture, NULL, NULL);
+	SDL_RenderCopy(renderer, vm_texture, &src, &dest);
 	SDL_RenderPresent(renderer);
 	return;
 
@@ -134,10 +137,11 @@ cleanup:
 
 void sdl_init(void)
 {
-	if (SDL_Init(SDL_INIT_EVERYTHING))
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
 		ERROR_EXIT("Could not initialize SDL");
 	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN,
 								&win, &renderer);
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, 0);
 	if (!(win) || !(renderer))
 		goto cleanup;
 	vm_texture = SDL_CreateTexture(renderer, winfmt, SDL_TEXTUREACCESS_STREAMING,
