@@ -1,5 +1,5 @@
 #ifdef __APPLE__
-    #include <sys/cdefs.h>
+#include <sys/cdefs.h>
 #endif
 #define _BSD_SOURCE
 #include <SDL.h>
@@ -15,20 +15,23 @@
 #define TIMER_HZ_NS 16666667
 #define FRAME_NS 2000000
 #define OPS_PER_FRAME 8
+#define SCALE 10 
+#define SCREEN_WIDTH 0x40 * SCALE
+#define SCREEN_HEIGHT 0x20 * SCALE
 
-#define SCREEN_WIDTH 0x40
-#define SCREEN_HEIGHT 0x20
-
-static void init_window(void);
-void destroy_window(void);
-int scancode_to_chip8(int scancode);
-void draw_screen(const chip8_vm *vm);
-void main_loop(chip8_vm *vm);
+void sdl_cleanup(void);
 static inline void difftime_ns(const struct timespec *then,
-                                const struct timespec *now,
-                                struct timespec *result);
+							   const struct timespec *now,
+							   struct timespec *result);
+void draw_screen(const chip8_vm *vm);
+void sdl_init(void);
+void main_loop(chip8_vm *vm);
+void update_vm_keyboard(chip8_vm *vm);
 
 static SDL_Window *win = NULL;
+static int winfmt = 0;
+static SDL_Renderer *renderer = NULL;
+static SDL_Texture *vm_texture = NULL;
 
 // argc, argv format required by SDL
 int main(int argc, char **argv)
@@ -39,8 +42,8 @@ int main(int argc, char **argv)
                                 argv[0]);
 		exit(EXIT_FAILURE);
 	}
-	init_window();
-	atexit(destroy_window);
+	sdl_init();
+	atexit(sdl_cleanup);
 	chip8_vm vm = init_chip8();
 	load_rom(argv[1], &vm);
 	main_loop(&vm);
@@ -55,7 +58,6 @@ void main_loop(chip8_vm *vm)
 	struct timespec frame_end;
 	struct timespec delay = { 0, 0 };
 	int ops_since_draw = 0;
-	int key;
 	int key_pressed = 0;
 	int delta;
 
@@ -69,9 +71,7 @@ void main_loop(chip8_vm *vm)
 			case SDL_KEYDOWN: // FALLTHROUGH
 				key_pressed = 1;
 			case SDL_KEYUP:
-				key = scancode_to_chip8(event.key.keysym.scancode);
-				if (key > 0)
-					vm->keyboard[key] = !vm->keyboard[key];
+				update_vm_keyboard(vm);
 			default:
 				continue;
 			}
@@ -84,7 +84,6 @@ void main_loop(chip8_vm *vm)
 			vm->delay_timer = ZERO_FLOOR(vm->delay_timer - 1);
 			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
-			SDL_UpdateWindowSurface(win);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
 			difftime_ns(&frame_start, &frame_end, &delay);
 			delta = (TIMER_HZ_NS - delay.tv_nsec) / 1000;
@@ -94,10 +93,14 @@ void main_loop(chip8_vm *vm)
 	}
 }
 
-void destroy_window(void)
+void sdl_cleanup(void)
 {
 	if (win)
 		SDL_DestroyWindow(win);
+	if (renderer)
+		SDL_DestroyRenderer(renderer);
+	if (vm_texture)
+		SDL_DestroyTexture(vm_texture);
 }
 
 static inline void difftime_ns(const struct timespec *then,
@@ -113,69 +116,68 @@ static inline void difftime_ns(const struct timespec *then,
 
 void draw_screen(const chip8_vm *vm)
 {
-	SDL_Surface *screen = SDL_CreateRGBSurfaceWithFormatFrom(
-		(void *)vm->screen, SCREEN_WIDTH, SCREEN_HEIGHT, 24, // bit depth
-		SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
-	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
-	SDL_FreeSurface(screen);
+	static const SDL_Rect dest = {.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT};
+	static const SDL_Rect src =	{.x = 0, .y = 0, .w = 0x40, .h = 0x20};
+	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
+	if (SDL_RenderClear(renderer))
+		goto cleanup;
+	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen,
+						  0x40 * sizeof(uint32_t)))
+		goto cleanup;
+	SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+	SDL_RenderCopy(renderer, vm_texture, &src, &dest);
+	SDL_RenderPresent(renderer);
+	return;
+
+cleanup:
+	if (vm_texture)
+		SDL_DestroyTexture(vm_texture);
+	ERROR_EXIT(SDL_GetError());
 }
 
-static void init_window(void)
+void sdl_init(void)
 {
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
 		ERROR_EXIT("Could not initialize SDL");
-	win = SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
-						   SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
-						   SDL_WINDOW_SHOWN);
-	if (!(win))
-		ERROR_EXIT("Failed to create window");
-	SDL_Surface *surf = SDL_GetWindowSurface(win);
-	if (!(surf))
-		ERROR_EXIT("Failed to create SDL surface");
-	SDL_FillRect(surf, NULL, SDL_MapRGB(surf->format, 0, 0, 0));
-	SDL_UpdateWindowSurface(win);
+	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN,
+								&win, &renderer);
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, 0);
+	if (!(win) || !(renderer))
+		goto cleanup;
+	vm_texture = SDL_CreateTexture(renderer, winfmt, SDL_TEXTUREACCESS_STREAMING,
+								   SCREEN_WIDTH, SCREEN_HEIGHT);
+	if (!vm_texture)
+		goto cleanup;
+	winfmt = SDL_GetWindowPixelFormat(win);
+	if (SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF))
+		goto cleanup;
+	if (SDL_RenderClear(renderer))
+		goto cleanup;
+	SDL_RenderPresent(renderer);
+	return;
+
+cleanup:
+	sdl_cleanup();
+	ERROR_EXIT(SDL_GetError());
 }
 
-int scancode_to_chip8(int scancode)
+void update_vm_keyboard(chip8_vm *vm)
 {
-	switch (scancode) {
-	// 123C
-	case SDL_SCANCODE_X:
-		return 0x0;
-	case SDL_SCANCODE_1:
-		return 0x1;
-	case SDL_SCANCODE_2:
-		return 0x2;
-	case SDL_SCANCODE_3:
-		return 0x3;
-	case SDL_SCANCODE_Q:
-		return 0x4;
-	// 456D
-	case SDL_SCANCODE_W:
-		return 0x5;
-	case SDL_SCANCODE_E:
-		return 0x6;
-	case SDL_SCANCODE_A:
-		return 0x7;
-	case SDL_SCANCODE_S:
-		return 0x8;
-	// 789E
-	case SDL_SCANCODE_D:
-		return 0x9;
-	case SDL_SCANCODE_Z:
-		return 0xA;
-	case SDL_SCANCODE_C:
-		return 0xB;
-	// A0BF
-	case SDL_SCANCODE_4:
-		return 0xC;
-	case SDL_SCANCODE_R:
-		return 0xD;
-	case SDL_SCANCODE_F:
-		return 0xE;
-	case SDL_SCANCODE_V:
-		return 0xF;
-	default:
-		return -1;
-	}
+	const uint8_t *kbd_state = SDL_GetKeyboardState(NULL);
+	vm->keyboard[0x0] = kbd_state[SDL_SCANCODE_X];
+	vm->keyboard[0x1] = kbd_state[SDL_SCANCODE_1];
+	vm->keyboard[0x2] = kbd_state[SDL_SCANCODE_2];
+	vm->keyboard[0x3] = kbd_state[SDL_SCANCODE_3];
+	vm->keyboard[0x4] = kbd_state[SDL_SCANCODE_Q];
+	vm->keyboard[0x5] = kbd_state[SDL_SCANCODE_W];
+	vm->keyboard[0x6] = kbd_state[SDL_SCANCODE_E];
+	vm->keyboard[0x7] = kbd_state[SDL_SCANCODE_A];
+	vm->keyboard[0x8] = kbd_state[SDL_SCANCODE_S];
+	vm->keyboard[0x9] = kbd_state[SDL_SCANCODE_D];
+	vm->keyboard[0xA] = kbd_state[SDL_SCANCODE_Z];
+	vm->keyboard[0xB] = kbd_state[SDL_SCANCODE_C];
+	vm->keyboard[0xC] = kbd_state[SDL_SCANCODE_4];
+	vm->keyboard[0xD] = kbd_state[SDL_SCANCODE_R];
+	vm->keyboard[0xE] = kbd_state[SDL_SCANCODE_F];
+	vm->keyboard[0xF] = kbd_state[SDL_SCANCODE_V];
 }
