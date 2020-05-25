@@ -1,11 +1,16 @@
-CFLAGS = -std=c99 -Wall -Wno-cpp -Wno-unused-label -Wshadow -Wvla
+CFLAGS = -std=c99 -Wall -Wno-cpp -Wno-unused-label -Wshadow -Wvla -Winline -finline-functions
 
 DEBUG ?= 0
 ifeq ($(DEBUG), 1)
-	CFLAGS += -g -O0 -fsanitize=address -fsanitize=leak -fsanitize=undefined \
-			  -fsanitize=bounds-strict -fsanitize=bounds-strict
+	CFLAGS += -g -O0 
 else
 	CFLAGS += -O2
+endif
+
+SAN ?= 0
+ifeq ($(SAN), 1)
+	CFLAGS += -fsanitize=address -fsanitize=leak -fsanitize=undefined \
+				-fsanitize=bounds-strict -fsanitize=bounds-strict
 endif
 
 PROF ?= 0

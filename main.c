@@ -1,5 +1,5 @@
 #ifdef __APPLE__
-	#include <sys/cdefs.h>
+#include <sys/cdefs.h>
 #endif
 #define _BSD_SOURCE
 #include <SDL.h>
@@ -15,21 +15,22 @@
 #define TIMER_HZ_NS 16666667
 #define FRAME_NS 2000000
 #define OPS_PER_FRAME 8
-
 #define SCREEN_WIDTH 0x40
 #define SCREEN_HEIGHT 0x20
 
-static void init_window(void);
-void destroy_window(void);
-int init_audio(void);
-void update_vm_keyboard(chip8_vm *vm);
-void draw_screen(const chip8_vm *vm);
-void main_loop(chip8_vm *vm);
+void sdl_cleanup(void);
 static inline void difftime_ns(const struct timespec *then,
 							   const struct timespec *now,
 							   struct timespec *result);
+void draw_screen(const chip8_vm *vm);
+void sdl_init(void);
+void main_loop(chip8_vm *vm);
+void update_vm_keyboard(chip8_vm *vm);
 
 static SDL_Window *win = NULL;
+static int winfmt = 0;
+static SDL_Renderer *renderer = NULL;
+static SDL_Texture *vm_texture = NULL;
 
 // argc, argv format required by SDL
 int main(int argc, char **argv)
@@ -39,8 +40,8 @@ int main(int argc, char **argv)
 						"Usage:\n\tchip8 [path to rom]\n");
 		exit(EXIT_FAILURE);
 	}
-	init_window();
-	atexit(destroy_window);
+	sdl_init();
+	atexit(sdl_cleanup);
 	chip8_vm vm = init_chip8();
 	load_rom(argv[1], &vm);
 	main_loop(&vm);
@@ -82,7 +83,6 @@ void main_loop(chip8_vm *vm)
 			vm->delay_timer = ZERO_FLOOR(vm->delay_timer - 1);
 			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
-			SDL_UpdateWindowSurface(win);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
 			difftime_ns(&frame_start, &frame_end, &delay);
 			delta = (TIMER_HZ_NS - delay.tv_nsec) / 1000;
@@ -92,10 +92,14 @@ void main_loop(chip8_vm *vm)
 	}
 }
 
-void destroy_window(void)
+void sdl_cleanup(void)
 {
 	if (win)
 		SDL_DestroyWindow(win);
+	if (renderer)
+		SDL_DestroyRenderer(renderer);
+	if (vm_texture)
+		SDL_DestroyTexture(vm_texture);
 }
 
 static inline void difftime_ns(const struct timespec *then,
@@ -111,42 +115,46 @@ static inline void difftime_ns(const struct timespec *then,
 
 void draw_screen(const chip8_vm *vm)
 {
-	SDL_Surface *screen = SDL_CreateRGBSurfaceWithFormatFrom(
-		(void *)vm->screen, SCREEN_WIDTH, SCREEN_HEIGHT, 24, // bit depth
-		SCREEN_WIDTH * 4, SDL_GetWindowPixelFormat(win));
-	SDL_BlitSurface(screen, NULL, SDL_GetWindowSurface(win), NULL);
-	SDL_FreeSurface(screen);
+	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
+	if (SDL_RenderClear(renderer))
+		goto cleanup;
+	if (SDL_UpdateTexture(vm_texture, NULL, (void *)vm->screen,
+						  SCREEN_WIDTH * sizeof(uint32_t)))
+		goto cleanup;
+	SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+	SDL_RenderCopy(renderer, vm_texture, NULL, NULL);
+	SDL_RenderPresent(renderer);
+	return;
+
+cleanup:
+	if (vm_texture)
+		SDL_DestroyTexture(vm_texture);
+	ERROR_EXIT(SDL_GetError());
 }
 
-int init_audio(void)
+void sdl_init(void)
 {
-	SDL_AudioSpec spec, act_spec;
-	SDL_zero(spec);
-	spec.freq = 48000;
-	spec.format = AUDIO_S16SYS;
-	spec.channels = 1;
-	spec.samples = 4096;
-	int id = SDL_OpenAudioDevice(NULL, 0, &spec, &act_spec,
-								 SDL_AUDIO_ALLOW_ANY_CHANGE);
-	if (id <= 0)
-		ERROR_EXIT(SDL_GetError());
-	return id;
-}
-
-static void init_window(void)
-{
-	if (SDL_Init(SDL_INIT_EVERYTHING) != 0)
+	if (SDL_Init(SDL_INIT_EVERYTHING))
 		ERROR_EXIT("Could not initialize SDL");
-	win = SDL_CreateWindow("Chip8 Emulator", SDL_WINDOWPOS_UNDEFINED,
-						   SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
-						   SDL_WINDOW_SHOWN);
-	if (!(win))
-		ERROR_EXIT("Failed to create window");
-	SDL_Surface *surf = SDL_GetWindowSurface(win);
-	if (!(surf))
-		ERROR_EXIT("Failed to create SDL surface");
-	SDL_FillRect(surf, NULL, SDL_MapRGB(surf->format, 0, 0, 0));
-	SDL_UpdateWindowSurface(win);
+	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN,
+								&win, &renderer);
+	if (!(win) || !(renderer))
+		goto cleanup;
+	vm_texture = SDL_CreateTexture(renderer, winfmt, SDL_TEXTUREACCESS_STREAMING,
+								   SCREEN_WIDTH, SCREEN_HEIGHT);
+	if (!vm_texture)
+		goto cleanup;
+	winfmt = SDL_GetWindowPixelFormat(win);
+	if (SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF))
+		goto cleanup;
+	if (SDL_RenderClear(renderer))
+		goto cleanup;
+	SDL_RenderPresent(renderer);
+	return;
+
+cleanup:
+	sdl_cleanup();
+	ERROR_EXIT(SDL_GetError());
 }
 
 void update_vm_keyboard(chip8_vm *vm)
