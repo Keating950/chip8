@@ -4,8 +4,6 @@
 #define _BSD_SOURCE
 #include <SDL.h>
 #include <SDL_video.h>
-#include <setjmp.h>
-#include <signal.h>
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
@@ -13,7 +11,6 @@
 #include "util.h"
 
 #define TIMER_HZ_NS 16666667
-#define FRAME_NS 2000000
 #define OPS_PER_FRAME 8
 #define SCALE 10 
 #define SCREEN_WIDTH 0x40 * SCALE
