@@ -17,9 +17,8 @@
 #define SCREEN_HEIGHT 0x20 * SCALE
 
 void sdl_cleanup(void);
-static inline void difftime_ns(const struct timespec *then,
-							   const struct timespec *now,
-							   struct timespec *result);
+static inline long difftime_ns(const struct timespec *then,
+							   const struct timespec *now);
 void draw_screen(const chip8_vm *vm);
 void sdl_init(void);
 void main_loop(chip8_vm *vm);
@@ -52,7 +51,6 @@ void main_loop(chip8_vm *vm)
 	SDL_Event event;
 	struct timespec frame_start;
 	struct timespec frame_end;
-	struct timespec delay = { 0, 0 };
 	int ops_since_draw = 0;
 	int key_pressed = 0;
 	int delta;
@@ -82,9 +80,8 @@ void main_loop(chip8_vm *vm)
 			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
-			difftime_ns(&frame_start, &frame_end, &delay);
-			delta = (TIMER_HZ_NS - delay.tv_nsec) / 1000;
-			if (ZERO_FLOOR(delta))
+			delta = ZERO_FLOOR((TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end))) / 1000;
+			if (delta)
 				usleep(delta);
 		}
 	}
@@ -100,14 +97,13 @@ void sdl_cleanup(void)
 		SDL_DestroyTexture(vm_texture);
 }
 
-static inline void difftime_ns(const struct timespec *then,
-							   const struct timespec *now,
-							   struct timespec *result)
+static inline long difftime_ns(const struct timespec *then,
+							   const struct timespec *now)
 {
 	if ((now->tv_nsec - then->tv_nsec) < 0) {
-		result->tv_nsec = now->tv_nsec - then->tv_nsec + 1000000000;
+		return now->tv_nsec - then->tv_nsec + 1000000000;
 	} else {
-		result->tv_nsec = now->tv_nsec - then->tv_nsec;
+		return now->tv_nsec - then->tv_nsec;
 	}
 }
 
