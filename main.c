@@ -7,14 +7,14 @@
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include "config.h"
 #include "chip8.h"
 #include "util.h"
 
 #define TIMER_HZ_NS 16666667
 #define OPS_PER_FRAME 8
-#define SCALE 10
-#define SCREEN_WIDTH 0x40 * SCALE
-#define SCREEN_HEIGHT 0x20 * SCALE
+#define SCREEN_WIDTH 0x40 * RENDER_SCALE
+#define SCREEN_HEIGHT 0x20 * RENDER_SCALE
 
 inline long difftime_ns(const struct timespec *then, const struct timespec *now);
 void draw_screen(const chip8_vm *vm);
@@ -157,20 +157,20 @@ cleanup:
 void update_vm_keyboard(chip8_vm *vm)
 {
 	const uint8_t *kbd_state = SDL_GetKeyboardState(NULL);
-	vm->keyboard[0x0] = kbd_state[SDL_SCANCODE_X];
-	vm->keyboard[0x1] = kbd_state[SDL_SCANCODE_1];
-	vm->keyboard[0x2] = kbd_state[SDL_SCANCODE_2];
-	vm->keyboard[0x3] = kbd_state[SDL_SCANCODE_3];
-	vm->keyboard[0x4] = kbd_state[SDL_SCANCODE_Q];
-	vm->keyboard[0x5] = kbd_state[SDL_SCANCODE_W];
-	vm->keyboard[0x6] = kbd_state[SDL_SCANCODE_E];
-	vm->keyboard[0x7] = kbd_state[SDL_SCANCODE_A];
-	vm->keyboard[0x8] = kbd_state[SDL_SCANCODE_S];
-	vm->keyboard[0x9] = kbd_state[SDL_SCANCODE_D];
-	vm->keyboard[0xA] = kbd_state[SDL_SCANCODE_Z];
-	vm->keyboard[0xB] = kbd_state[SDL_SCANCODE_C];
-	vm->keyboard[0xC] = kbd_state[SDL_SCANCODE_4];
-	vm->keyboard[0xD] = kbd_state[SDL_SCANCODE_R];
-	vm->keyboard[0xE] = kbd_state[SDL_SCANCODE_F];
-	vm->keyboard[0xF] = kbd_state[SDL_SCANCODE_V];
+	vm->keyboard[0x0] = kbd_state[CHIP8_KEY_0];
+	vm->keyboard[0x1] = kbd_state[CHIP8_KEY_1];
+	vm->keyboard[0x2] = kbd_state[CHIP8_KEY_2];
+	vm->keyboard[0x3] = kbd_state[CHIP8_KEY_3];
+	vm->keyboard[0x4] = kbd_state[CHIP8_KEY_4];
+	vm->keyboard[0x5] = kbd_state[CHIP8_KEY_5];
+	vm->keyboard[0x6] = kbd_state[CHIP8_KEY_6];
+	vm->keyboard[0x7] = kbd_state[CHIP8_KEY_7];
+	vm->keyboard[0x8] = kbd_state[CHIP8_KEY_8];
+	vm->keyboard[0x9] = kbd_state[CHIP8_KEY_9];
+	vm->keyboard[0xA] = kbd_state[CHIP8_KEY_A];
+	vm->keyboard[0xB] = kbd_state[CHIP8_KEY_B];
+	vm->keyboard[0xC] = kbd_state[CHIP8_KEY_C];
+	vm->keyboard[0xD] = kbd_state[CHIP8_KEY_D];
+	vm->keyboard[0xE] = kbd_state[CHIP8_KEY_E];
+	vm->keyboard[0xF] = kbd_state[CHIP8_KEY_F];
 }
