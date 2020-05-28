@@ -12,16 +12,15 @@
 
 #define TIMER_HZ_NS 16666667
 #define OPS_PER_FRAME 8
-#define SCALE 10 
+#define SCALE 10
 #define SCREEN_WIDTH 0x40 * SCALE
 #define SCREEN_HEIGHT 0x20 * SCALE
 
-void sdl_cleanup(void);
-static inline long difftime_ns(const struct timespec *then,
-							   const struct timespec *now);
+inline long difftime_ns(const struct timespec *then, const struct timespec *now);
 void draw_screen(const chip8_vm *vm);
-void sdl_init(void);
 void main_loop(chip8_vm *vm);
+void sdl_init(void);
+void sdl_cleanup(void);
 void update_vm_keyboard(chip8_vm *vm);
 
 static SDL_Window *win = NULL;
@@ -32,11 +31,9 @@ static SDL_Texture *vm_texture = NULL;
 // argc, argv format required by SDL
 int main(int argc, char **argv)
 {
-	if (argc < 2) {
-		fprintf(stderr, "Wrong number of arguments.\n"
-						"Usage:\n\tchip8 [path to rom]\n");
-		exit(EXIT_FAILURE);
-	}
+	if (argc < 2) 
+		DIE("Wrong number of arguments.\n"
+			"Usage:\n\tchip8 [path to rom]\n");
 	sdl_init();
 	atexit(sdl_cleanup);
 	chip8_vm vm = init_chip8();
@@ -80,25 +77,16 @@ void main_loop(chip8_vm *vm)
 			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
-			delta = ZERO_FLOOR((TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end))) / 1000;
+			delta =
+				ZERO_FLOOR((TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end)))
+				/ 1000;
 			if (delta)
 				usleep(delta);
 		}
 	}
 }
 
-void sdl_cleanup(void)
-{
-	if (win)
-		SDL_DestroyWindow(win);
-	if (renderer)
-		SDL_DestroyRenderer(renderer);
-	if (vm_texture)
-		SDL_DestroyTexture(vm_texture);
-}
-
-static inline long difftime_ns(const struct timespec *then,
-							   const struct timespec *now)
+inline long difftime_ns(const struct timespec *then, const struct timespec *now)
 {
 	if ((now->tv_nsec - then->tv_nsec) < 0) {
 		return now->tv_nsec - then->tv_nsec + 1000000000;
@@ -109,8 +97,10 @@ static inline long difftime_ns(const struct timespec *then,
 
 void draw_screen(const chip8_vm *vm)
 {
-	static const SDL_Rect dest = {.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT};
-	static const SDL_Rect src =	{.x = 0, .y = 0, .w = 0x40, .h = 0x20};
+	static const SDL_Rect dest = {
+		.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT
+	};
+	static const SDL_Rect src = { .x = 0, .y = 0, .w = 0x40, .h = 0x20 };
 	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
 	if (SDL_RenderClear(renderer))
 		goto cleanup;
@@ -125,13 +115,23 @@ void draw_screen(const chip8_vm *vm)
 cleanup:
 	if (vm_texture)
 		SDL_DestroyTexture(vm_texture);
-	ERROR_EXIT(SDL_GetError());
+	DIE(SDL_GetError());
+}
+
+void sdl_cleanup(void)
+{
+	if (win)
+		SDL_DestroyWindow(win);
+	if (renderer)
+		SDL_DestroyRenderer(renderer);
+	if (vm_texture)
+		SDL_DestroyTexture(vm_texture);
 }
 
 void sdl_init(void)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
-		ERROR_EXIT("Could not initialize SDL");
+		DIE("Could not initialize SDL");
 	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN,
 								&win, &renderer);
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, 0);
@@ -151,7 +151,7 @@ void sdl_init(void)
 
 cleanup:
 	sdl_cleanup();
-	ERROR_EXIT(SDL_GetError());
+	DIE(SDL_GetError());
 }
 
 void update_vm_keyboard(chip8_vm *vm)
