@@ -31,7 +31,7 @@ static SDL_Texture *vm_texture = NULL;
 // argc, argv format required by SDL
 int main(int argc, char **argv)
 {
-	if (argc < 2) 
+	if (argc < 2)
 		DIE("Wrong number of arguments.\n"
 			"Usage:\n\tchip8 [path to rom]\n");
 	sdl_init();
@@ -48,9 +48,10 @@ void main_loop(chip8_vm *vm)
 	SDL_Event event;
 	struct timespec frame_start;
 	struct timespec frame_end;
-	int ops_since_draw = 0;
-	int key_pressed = 0;
 	int delta;
+	int key_pressed = 0;
+	int ops_since_draw = 0;
+	int paused = 0;
 
 	while (1) {
 		if (!ops_since_draw)
@@ -60,12 +61,19 @@ void main_loop(chip8_vm *vm)
 			case SDL_QUIT:
 				return;
 			case SDL_KEYDOWN: // FALLTHROUGH
-				key_pressed = 1;
+				if (event.key.keysym.scancode == PAUSE_KEY)
+					paused = !paused;
+				else
+					key_pressed = 1;
 			case SDL_KEYUP:
 				update_vm_keyboard(vm);
 			default:
 				continue;
 			}
+		}
+		if (paused) {
+			usleep(250000); // quarter-second
+			continue;
 		}
 		vm_cycle(vm, key_pressed);
 		key_pressed = 0;
