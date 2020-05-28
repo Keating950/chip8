@@ -66,11 +66,11 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 	vm->v[0xF] = 0;
 
 	for (y = 0; y < height && (y + height) < ROWS; y++) {
-		if ((y + VY) > ROWS)
+		if ((y + VY) >= ROWS)
 			break;
 		sprite_pixel = vm->mem[vm->idx + y];
 		for (x = 0; x < 8; x++) {
-			if ((x + VX) > COLS)
+			if ((x + VX) >= COLS)
 				break;
 			if (sprite_pixel & (0x80 >> x)) {
 				if (VMPIXEL((x+VX), (y+VY)))
