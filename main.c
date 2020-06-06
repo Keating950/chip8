@@ -16,7 +16,8 @@
 #define SCREEN_WIDTH 0x40 * RENDER_SCALE
 #define SCREEN_HEIGHT 0x20 * RENDER_SCALE
 
-inline long difftime_ns(const struct timespec *then, const struct timespec *now);
+inline long difftime_ns(const struct timespec *then,
+						const struct timespec *now);
 void draw_screen(const chip8_vm *vm);
 void main_loop(chip8_vm *vm);
 void sdl_init(void);
@@ -24,7 +25,6 @@ void sdl_cleanup(void);
 void update_vm_keyboard(chip8_vm *vm);
 
 static SDL_Window *win = NULL;
-static int winfmt = 0;
 static SDL_Renderer *renderer = NULL;
 static SDL_Texture *vm_texture = NULL;
 
@@ -34,8 +34,8 @@ int main(int argc, char **argv)
 	if (argc < 2)
 		DIE("Wrong number of arguments.\n"
 			"Usage:\n\tchip8 [path to rom]\n");
-	sdl_init();
 	atexit(sdl_cleanup);
+	sdl_init();
 	chip8_vm vm = init_chip8();
 	load_rom(argv[1], &vm);
 	main_loop(&vm);
@@ -87,9 +87,9 @@ void main_loop(chip8_vm *vm)
 			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
-			delta =
-				ZERO_FLOOR((TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end)))
-				/ 1000;
+			delta = ZERO_FLOOR(
+						(TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end))) /
+					1000;
 			if (delta)
 				usleep(delta);
 		}
@@ -113,19 +113,13 @@ void draw_screen(const chip8_vm *vm)
 	static const SDL_Rect src = { .x = 0, .y = 0, .w = 0x40, .h = 0x20 };
 	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
 	if (SDL_RenderClear(renderer))
-		goto cleanup;
+		DIE(SDL_GetError());
 	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen,
 						  0x40 * sizeof(uint32_t)))
-		goto cleanup;
+		DIE(SDL_GetError());
 	SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
 	SDL_RenderCopy(renderer, vm_texture, &src, &dest);
 	SDL_RenderPresent(renderer);
-	return;
-
-cleanup:
-	if (vm_texture)
-		SDL_DestroyTexture(vm_texture);
-	DIE(SDL_GetError());
 }
 
 void sdl_cleanup(void)
@@ -146,22 +140,17 @@ void sdl_init(void)
 								&win, &renderer);
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, 0);
 	if (!(win) || !(renderer))
-		goto cleanup;
-	vm_texture = SDL_CreateTexture(renderer, winfmt, SDL_TEXTUREACCESS_STREAMING,
-								   SCREEN_WIDTH, SCREEN_HEIGHT);
+		DIE(SDL_GetError());
+	vm_texture = SDL_CreateTexture(renderer, SDL_GetWindowPixelFormat(win),
+								   SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH,
+								   SCREEN_HEIGHT);
 	if (!vm_texture)
-		goto cleanup;
-	winfmt = SDL_GetWindowPixelFormat(win);
+		DIE(SDL_GetError());
 	if (SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF))
-		goto cleanup;
+		DIE(SDL_GetError());
 	if (SDL_RenderClear(renderer))
-		goto cleanup;
+		DIE(SDL_GetError());
 	SDL_RenderPresent(renderer);
-	return;
-
-cleanup:
-	sdl_cleanup();
-	DIE(SDL_GetError());
 }
 
 void update_vm_keyboard(chip8_vm *vm)

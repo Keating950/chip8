@@ -18,16 +18,16 @@ ifeq ($(PROF), 1)
 	CFLAGS += -g -pg
 endif
 
-SDL2=`pkg-config --cflags --libs sdl2`
+SDL2=$(shell pkg-config --cflags --libs sdl2)
 
 chip8: main.o chip8.o
-	$(CC) -o chip8 $(CFLAGS) $(SDL2) main.o chip8.o
+	$(CC) -o chip8 $(CFLAGS) main.o chip8.o $(SDL2)
 
 main.o: main.c util.h
-	$(CC) -c $(CFLAGS) $(SDL2) main.c util.h
+	$(CC) -c $(CFLAGS) main.c util.h $(SDL2)
 
 chip8.o: chip8.c chip8.h util.h
-	$(CC) -c $(CFLAGS) $(SDL2) chip8.c chip8.h util.h
+	$(CC) -c $(CFLAGS) chip8.c chip8.h util.h
 
 clean:
 	rm -f *.out *.o *.gch
