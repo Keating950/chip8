@@ -1,4 +1,4 @@
-CFLAGS = -std=c99 -Wall -Wno-cpp -Wno-unused-label -Wshadow -Wvla -Winline -finline-functions
+CFLAGS = -std=c99 -Wall -Wextra -Wno-cpp -Wno-unused-label -Wimplicit-fallthrough=2 -Wshadow -Wvla -Winline -finline-functions
 
 DEBUG ?= 0
 ifeq ($(DEBUG), 1)

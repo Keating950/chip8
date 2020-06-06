@@ -60,11 +60,13 @@ void main_loop(chip8_vm *vm)
 			switch (event.type) {
 			case SDL_QUIT:
 				return;
-			case SDL_KEYDOWN: // FALLTHROUGH
-				if (event.key.keysym.scancode == PAUSE_KEY)
+			case SDL_KEYDOWN:
+				if (event.key.keysym.scancode == PAUSE_KEY) {
 					paused = !paused;
+					break;
+				}
 				else
-					key_pressed = 1;
+					key_pressed = 1; // FALLTHROUGH
 			case SDL_KEYUP:
 				update_vm_keyboard(vm);
 			default:

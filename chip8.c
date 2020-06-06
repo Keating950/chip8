@@ -62,7 +62,7 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
 	int x, y;
 	uint8_t sprite_pixel;
-	int height = opcode & 0x000Fu;
+	int height = opcode & 0xFu;
 	vm->v[0xF] = 0;
 
 	for (y = 0; y < height && (y + height) < ROWS; y++) {
@@ -196,11 +196,8 @@ math:
 		break;
 	case 0x7:
 		// 8XY7: same as 0x5, but Vy-Vx instead of Vx-Vy
-		do {
-			uint32_t tmp = VY - VX;
-			vm->v[0xF] = (tmp < 0) ? 1 : 0;
-			VY -= VX;
-		} while (0);
+		vm->v[0xF] = VY > VX;
+		VY -= VX;
 		break;
 	case 0xE:
 		// 8XYE: multiplication by two; set VF if remainder

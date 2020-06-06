@@ -8,6 +8,7 @@ build
 *.bmp
 compile_commands.json
 tags
+.tags
 chip8
 cmake-build-debug
 debug.c
