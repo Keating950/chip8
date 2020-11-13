@@ -113,13 +113,8 @@ void draw_screen(const chip8_vm *vm)
 		.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT
 	};
 	static const SDL_Rect src = { .x = 0, .y = 0, .w = 0x40, .h = 0x20 };
-	SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
-	if (SDL_RenderClear(renderer))
+	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen, 0x40 * sizeof(uint32_t)))
 		DIE(SDL_GetError());
-	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen,
-			      0x40 * sizeof(uint32_t)))
-		DIE(SDL_GetError());
-	SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
 	SDL_RenderCopy(renderer, vm_texture, &src, &dest);
 	SDL_RenderPresent(renderer);
 }
