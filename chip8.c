@@ -44,7 +44,7 @@ void load_rom(const char *path, chip8_vm *vm)
 	size_t bytes_read;
 	FILE *f = fopen(path, "rb");
 	if (!f)
-		ERROR_EXIT("Failed to open file");
+		DIE("Failed to open file");
 	fseek(f, 0, SEEK_END);
 	rom_size = ftell(f);
 	if (rom_size > 0x800) {
@@ -54,7 +54,7 @@ void load_rom(const char *path, chip8_vm *vm)
 	rewind(f);
 	bytes_read = fread((vm->mem + 0x200), sizeof(uint8_t), rom_size, f);
 	if (bytes_read != rom_size)
-		ERROR_EXIT("Error reading file");
+		DIE("Error reading file");
 }
 
 #define VMPIXEL(X, Y) vm->screen[Y * COLS + X]
@@ -62,15 +62,15 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
 	int x, y;
 	uint8_t sprite_pixel;
-	int height = opcode & 0x000Fu;
+	int height = opcode & 0xFu;
 	vm->v[0xF] = 0;
 
 	for (y = 0; y < height && (y + height) < ROWS; y++) {
-		if ((y + VY) > ROWS)
+		if ((y + VY) >= ROWS)
 			break;
 		sprite_pixel = vm->mem[vm->idx + y];
 		for (x = 0; x < 8; x++) {
-			if ((x + VX) > COLS)
+			if ((x + VX) >= COLS)
 				break;
 			if (sprite_pixel & (0x80 >> x)) {
 				if (VMPIXEL((x+VX), (y+VY)))
@@ -110,7 +110,7 @@ zero_ops:
 		if (vm->sp < 15)
 			vm->pc = vm->stack[vm->sp++] + 2;
 		else
-			ERROR_EXIT("Attempted pop from empty VM Stack");
+			DIE("Attempted pop from empty VM Stack\n");
 		return;
 	default:
 		// 0NNN: Deprecated instruction
@@ -126,7 +126,7 @@ jump_and_link:
 	if (vm->sp > 0)
 		vm->stack[--vm->sp] = vm->pc;
 	else
-		ERROR_EXIT("Attempted push to full VM Stack");
+		DIE("Attempted push to full VM Stack\n");
 	vm->pc = opcode & 0x0FFFu;
 	return;
 reg_eq_im:
@@ -196,11 +196,8 @@ math:
 		break;
 	case 0x7:
 		// 8XY7: same as 0x5, but Vy-Vx instead of Vx-Vy
-		do {
-			uint32_t tmp = VY - VX;
-			vm->v[0xF] = (tmp < 0) ? 1 : 0;
-			VY -= VX;
-		} while (0);
+		vm->v[0xF] = VY > VX;
+		VY -= VX;
 		break;
 	case 0xE:
 		// 8XYE: Multiplication by two; set VF if remainder
@@ -209,7 +206,7 @@ math:
 		VX <<= 1;
 		break;
 	default:
-		ERROR_EXIT("Unknown opcode 8xxx");
+		DIE("Unknown opcode 8xxx");
 	}
 	vm->pc += 2;
 	return;
@@ -255,7 +252,7 @@ exxx_keyops:
 			vm->pc += 2;
 		return;
 	default:
-		ERROR_EXIT("Unknown opcode Exxx");
+		DIE("Unknown opcode Exxx");
 	}
 fxxx_ops:
 	switch (opcode & 0x00FF) {
@@ -323,7 +320,7 @@ fxxx_ops:
 		vm->pc += 2;
 		break;
 	default:
-		ERROR_EXIT("Unknown opcode Fxxx");
+		DIE("Unknown opcode Fxxx");
 	}
 	return;
 }
