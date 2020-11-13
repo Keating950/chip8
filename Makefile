@@ -1,4 +1,4 @@
-CFLAGS = -std=c99 -Wall -Wextra -Wno-cpp -Wno-unused-label -Wimplicit-fallthrough=2 -Wshadow -Wvla -Winline -finline-functions
+CFLAGS = -std=c99 -Wall -Wextra -Wno-cpp -Wno-unused-label -Wshadow -Wvla -Winline -finline-functions
 
 DEBUG ?= 0
 ifeq ($(DEBUG), 1)
@@ -30,4 +30,4 @@ chip8.o: chip8.c chip8.h util.h
 	$(CC) -c $(CFLAGS) chip8.c chip8.h util.h
 
 clean:
-	rm -f *.out *.o *.gch
+	rm -f chip8 *.o *.gch
