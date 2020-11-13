@@ -16,12 +16,10 @@
 #define SCREEN_WIDTH 0x40 * RENDER_SCALE
 #define SCREEN_HEIGHT 0x20 * RENDER_SCALE
 
-inline long difftime_ns(const struct timespec *then,
-						const struct timespec *now);
+long difftime_ns(const struct timespec *then, const struct timespec *now);
 void draw_screen(const chip8_vm *vm);
 void main_loop(chip8_vm *vm);
 void sdl_init(void);
-void sdl_cleanup(void);
 void update_vm_keyboard(chip8_vm *vm);
 
 static SDL_Window *win = NULL;
@@ -31,10 +29,12 @@ static SDL_Texture *vm_texture = NULL;
 // argc, argv format required by SDL
 int main(int argc, char **argv)
 {
-	if (argc < 2)
-		DIE("Wrong number of arguments.\n"
-			"Usage:\n\tchip8 [path to rom]\n");
-	atexit(sdl_cleanup);
+	if (argc < 2) {
+		fputs("Wrong number of arguments.\n"
+			  "Usage:\n\tchip8 [path to rom]\n",
+			  stderr);
+		exit(EXIT_FAILURE);
+	}
 	sdl_init();
 	chip8_vm vm = init_chip8();
 	load_rom(argv[1], &vm);
@@ -62,10 +62,11 @@ void main_loop(chip8_vm *vm)
 				return;
 			case SDL_KEYDOWN:
 				if (event.key.keysym.scancode == PAUSE_KEY) {
+					ops_since_draw = 0;
+					clock_gettime(CLOCK_MONOTONIC, &frame_start);
 					paused = !paused;
 					break;
-				}
-				else
+				} else
 					key_pressed = 1; // FALLTHROUGH
 			case SDL_KEYUP:
 				update_vm_keyboard(vm);
@@ -87,9 +88,9 @@ void main_loop(chip8_vm *vm)
 			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
-			delta = ZERO_FLOOR(
-						(TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end))) /
-					1000;
+			delta =
+				ZERO_FLOOR((TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end)))
+				/ 1000;
 			if (delta)
 				usleep(delta);
 		}
@@ -120,16 +121,6 @@ void draw_screen(const chip8_vm *vm)
 	SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
 	SDL_RenderCopy(renderer, vm_texture, &src, &dest);
 	SDL_RenderPresent(renderer);
-}
-
-void sdl_cleanup(void)
-{
-	if (win)
-		SDL_DestroyWindow(win);
-	if (renderer)
-		SDL_DestroyRenderer(renderer);
-	if (vm_texture)
-		SDL_DestroyTexture(vm_texture);
 }
 
 void sdl_init(void)
