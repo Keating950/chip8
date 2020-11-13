@@ -111,7 +111,10 @@ void draw_screen(const chip8_vm *vm)
 	static const SDL_Rect dest = {
 		.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT
 	};
-	static const SDL_Rect src = { .x = 0, .y = 0, .w = 0x40, .h = 0x20 };
+	static const SDL_Rect src = {
+		.x = 0, .y = 0,
+		.w = SCREEN_WIDTH / RENDER_SCALE, .h = SCREEN_HEIGHT / RENDER_SCALE
+	};
 	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen, 0x40 * sizeof(uint32_t)))
 		DIE(SDL_GetError());
 	SDL_RenderCopy(renderer, vm_texture, &src, &dest);
