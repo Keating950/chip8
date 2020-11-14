@@ -5,10 +5,12 @@
 #include "chip8.h"
 #include "util.h"
 
+#define COLS 0x40
+#define ROWS 0x20
 #define VX vm->v[(opcode & 0x0F00) >> 8]
 #define VY vm->v[(opcode & 0x00F0) >> 4]
 
-static const uint8_t font_set[] = {
+const uint8_t font_set[] = {
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
 	0x20, 0x60, 0x20, 0x20, 0x70, // 1
 	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -24,14 +26,13 @@ static const uint8_t font_set[] = {
 	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
 	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
 	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-	0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+	0xF0, 0x80, 0xF0, 0x80, 0x80 // F
 };
 
 chip8_vm init_chip8()
 {
 	srand(clock()); // for opcode requiring RNG
-	chip8_vm vm;
-	memset(&vm, 0, sizeof(chip8_vm));
+	chip8_vm vm = { 0 };
 	vm.pc = 0xC8;
 	vm.sp = 0xF;
 	memcpy(&vm.mem, font_set, LEN(font_set));
@@ -53,43 +54,47 @@ void load_rom(const char *path, chip8_vm *vm)
 	}
 	rewind(f);
 	bytes_read = fread((vm->mem + 0x200), sizeof(uint8_t), rom_size, f);
+	fclose(f);
 	if (bytes_read != rom_size)
 		DIE("Error reading file");
 }
 
-#define VMPIXEL(X, Y) vm->screen[Y * COLS + X]
 static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
+#define VMPIXEL(X, Y) vm->screen[Y * COLS + X]
 	int x, y;
 	uint8_t sprite_pixel;
 	int height = opcode & 0xFu;
 	vm->v[0xF] = 0;
 
 	for (y = 0; y < height && (y + height) < ROWS; y++) {
-		if ((y + VY) >= ROWS)
+		if ((y + VY) >= ROWS) {
 			break;
+		}
 		sprite_pixel = vm->mem[vm->idx + y];
 		for (x = 0; x < 8; x++) {
-			if ((x + VX) >= COLS)
+			if ((x + VX) >= COLS) {
 				break;
+			}
 			if (sprite_pixel & (0x80 >> x)) {
-				if (VMPIXEL((x+VX), (y+VY)))
+				if (VMPIXEL((x + VX), (y + VY))) {
 					vm->v[0xF] = 1;
-				VMPIXEL((x+VX), (y+VY)) ^= UINT32_MAX;
+				}
+				VMPIXEL((x + VX), (y + VY)) ^= UINT32_MAX;
 			}
 		}
 	}
-}
 #undef VMPIXEL
+}
 
 void vm_cycle(chip8_vm *vm, int key_pressed)
 {
-	const unsigned short opcode = vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
+	const uint16_t opcode = vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
 	static const void *opcode_handles[] = {
-		&&zero_ops,	  &&jump,		 &&jump_and_link, &&reg_eq_im,
-		&&reg_neq_im, &&reg_eq_reg,	 &&load_halfword, &&add_halfword,
-		&&math,		  &&reg_neq_reg, &&set_idx,		  &&jump_idx_plus_reg,
-		&&random_and, &&draw,		 &&exxx_keyops,	  &&fxxx_ops,
+		&&zero_ops,   &&jump,	     &&jump_and_link, &&reg_eq_im,
+		&&reg_neq_im, &&reg_eq_reg,  &&load_halfword, &&add_halfword,
+		&&math,	      &&reg_neq_reg, &&set_idx,	      &&jump_idx_plus_reg,
+		&&random_and, &&draw,	     &&exxx_keyops,   &&fxxx_ops,
 	};
 	if (((opcode & 0xF000u) >> 12) < LEN(opcode_handles))
 		goto *opcode_handles[(opcode & 0xF000u) >> 12];
@@ -102,7 +107,7 @@ zero_ops:
 	switch (opcode & 0x00FFu) {
 	case 0xE0:
 		// Clear screen
-		memset(vm->screen, 0, ROWS*COLS*sizeof(uint32_t));
+		memset(vm->screen, 0, ROWS * COLS * sizeof(uint32_t));
 		vm->pc += 2;
 		return;
 	case 0xEE:
@@ -264,7 +269,7 @@ fxxx_ops:
 	case 0x0A:
 		// FX0A: Blocking I/O
 		// Frames continue, but the pc doesn't advance until
-                // a key is pressed
+		// a key is pressed
 		if (!key_pressed)
 			return;
 		for (size_t i = 0; i < LEN(vm->keyboard); i++) {
