@@ -87,7 +87,7 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 #undef VMPIXEL
 }
 
-void vm_cycle(chip8_vm *vm, int key_pressed)
+void vm_cycle(chip8_vm *vm, bool key_pressed)
 {
 	const uint16_t opcode = vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
 	static const void *opcode_handles[] = {

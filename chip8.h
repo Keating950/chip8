@@ -1,6 +1,7 @@
 #ifndef CHIP8_H
 #define CHIP8_H
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct {
 	uint8_t mem[0x1000];
@@ -17,6 +18,6 @@ typedef struct {
 
 chip8_vm init_chip8();
 void load_rom(const char *path, chip8_vm *vm);
-void vm_cycle(chip8_vm *vm, int key_pressed);
+void vm_cycle(chip8_vm *vm, bool key_pressed);
 
 #endif // CHIP8_H

@@ -48,11 +48,11 @@ void main_loop(chip8_vm *vm)
 	struct timespec frame_start;
 	struct timespec frame_end;
 	int delta;
-	int key_pressed = 0;
+	bool key_pressed = false;
 	int ops_since_draw = 0;
-	int paused = 0;
+	bool paused = false;
 
-	while (1) {
+	for (;;) {
 		if (!ops_since_draw)
 			clock_gettime(CLOCK_MONOTONIC, &frame_start);
 		while (SDL_PollEvent(&event)) {
@@ -62,16 +62,14 @@ void main_loop(chip8_vm *vm)
 			case SDL_KEYDOWN:
 				if (event.key.keysym.scancode == PAUSE_KEY) {
 					ops_since_draw = 0;
-					clock_gettime(CLOCK_MONOTONIC,
-						      &frame_start);
+					clock_gettime(CLOCK_MONOTONIC, &frame_start);
 					paused = !paused;
 					break;
-				} else
-					key_pressed = 1; // FALLTHROUGH
+				} else {
+					key_pressed = true; // FALLTHROUGH
+				}
 			case SDL_KEYUP:
 				update_vm_keyboard(vm);
-			default:
-				continue;
 			}
 		}
 		if (paused) {
@@ -79,7 +77,7 @@ void main_loop(chip8_vm *vm)
 			continue;
 		}
 		vm_cycle(vm, key_pressed);
-		key_pressed = 0;
+		key_pressed = false;
 
 		if (ops_since_draw++ == OPS_PER_FRAME) {
 			ops_since_draw = 0;
@@ -88,8 +86,7 @@ void main_loop(chip8_vm *vm)
 			draw_screen(vm);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
 			delta = ZERO_FLOOR((TIMER_HZ_NS -
-					    difftime_ns(&frame_start,
-							&frame_end))) /
+					    difftime_ns(&frame_start, &frame_end))) /
 				1000;
 			if (delta)
 				usleep(delta);
@@ -99,11 +96,9 @@ void main_loop(chip8_vm *vm)
 
 inline long difftime_ns(const struct timespec *then, const struct timespec *now)
 {
-	if ((now->tv_nsec - then->tv_nsec) < 0) {
-		return now->tv_nsec - then->tv_nsec + 1000000000;
-	} else {
-		return now->tv_nsec - then->tv_nsec;
-	}
+	const long one_sec = 1000000000;
+	long nsec_diff = now->tv_nsec - then->tv_nsec;
+	return nsec_diff > 0 ? nsec_diff : nsec_diff + one_sec;
 }
 
 void draw_screen(const chip8_vm *vm)
@@ -111,11 +106,12 @@ void draw_screen(const chip8_vm *vm)
 	static const SDL_Rect dest = {
 		.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT
 	};
-	static const SDL_Rect src = {
-		.x = 0, .y = 0,
-		.w = SCREEN_WIDTH / RENDER_SCALE, .h = SCREEN_HEIGHT / RENDER_SCALE
-	};
-	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen, 0x40 * sizeof(uint32_t)))
+	static const SDL_Rect src = { .x = 0,
+				      .y = 0,
+				      .w = SCREEN_WIDTH / RENDER_SCALE,
+				      .h = SCREEN_HEIGHT / RENDER_SCALE };
+	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen,
+			      0x40 * sizeof(uint32_t)))
 		DIE(SDL_GetError());
 	SDL_RenderCopy(renderer, vm_texture, &src, &dest);
 	SDL_RenderPresent(renderer);
@@ -125,14 +121,14 @@ void sdl_init(void)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
 		DIE("Could not initialize SDL");
-	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT,
-				    SDL_WINDOW_SHOWN, &win, &renderer);
+	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN, &win,
+				    &renderer);
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, 0);
 	if (!(win) || !(renderer))
 		DIE(SDL_GetError());
 	vm_texture = SDL_CreateTexture(renderer, SDL_GetWindowPixelFormat(win),
-				       SDL_TEXTUREACCESS_STREAMING,
-				       SCREEN_WIDTH, SCREEN_HEIGHT);
+				       SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH,
+				       SCREEN_HEIGHT);
 	if (!vm_texture)
 		DIE(SDL_GetError());
 	if (SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF))
