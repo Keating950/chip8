@@ -5,10 +5,11 @@
 #include "chip8.h"
 #include "util.h"
 
-#define COLS 0x40
-#define ROWS 0x20
-#define VX vm->v[(opcode & 0x0F00) >> 8]
-#define VY vm->v[(opcode & 0x00F0) >> 4]
+#define COLS 	(0x40)
+#define ROWS 	(0x20)
+#define VX 		(vm->v[(opcode & 0x0F00) >> 8])
+#define VY 		(vm->v[(opcode & 0x00F0) >> 4])
+#define likely(x)       __builtin_expect((x),1)
 
 const uint8_t font_set[] = {
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -61,7 +62,7 @@ void load_rom(const char *path, chip8_vm *vm)
 
 static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 {
-#define VMPIXEL(X, Y) vm->screen[Y * COLS + X]
+#define VMPIXEL(X, Y) (vm->screen[Y * COLS + X])
 	int x, y;
 	uint8_t sprite_pixel;
 	int height = opcode & 0xFu;
@@ -89,14 +90,14 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 
 void vm_cycle(chip8_vm *vm, bool key_pressed)
 {
-	const uint16_t opcode = vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
 	static const void *opcode_handles[] = {
 		&&zero_ops,   &&jump,	     &&jump_and_link, &&reg_eq_im,
 		&&reg_neq_im, &&reg_eq_reg,  &&load_halfword, &&add_halfword,
 		&&math,	      &&reg_neq_reg, &&set_idx,	      &&jump_idx_plus_reg,
 		&&random_and, &&draw,	     &&exxx_keyops,   &&fxxx_ops,
 	};
-	if (((opcode & 0xF000u) >> 12) < LEN(opcode_handles))
+	const uint16_t opcode = vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
+	if (likely(((opcode & 0xF000u) >> 12) < LEN(opcode_handles)))
 		goto *opcode_handles[(opcode & 0xF000u) >> 12];
 	else {
 		fprintf(stderr, "Error: Unknown opcode %#X\n", opcode);
@@ -112,7 +113,7 @@ zero_ops:
 		return;
 	case 0xEE:
 		// jr $ra
-		if (vm->sp < 15)
+		if (likely(vm->sp < 15))
 			vm->pc = vm->stack[vm->sp++] + 2;
 		else
 			DIE("Attempted pop from empty VM Stack\n");
@@ -128,32 +129,23 @@ jump:
 	return;
 jump_and_link:
 	// 2NNN: Call subroutine, storing pc
-	if (vm->sp > 0)
+	if (likely(vm->sp > 0))
 		vm->stack[--vm->sp] = vm->pc;
 	else
 		DIE("Attempted push to full VM Stack\n");
 	vm->pc = opcode & 0x0FFFu;
 	return;
 reg_eq_im:
-	// 3XNN: Skip next instruction if Vx==NN
-	if ((VX) == (opcode & 0xFF))
-		vm->pc += 4;
-	else
-		vm->pc += 2;
+	// 3XNN: Skip next instruction if Vx==00NN
+	vm->pc += (VX == (opcode & 0xFF)) ? 4 : 2;
 	return;
 reg_neq_im:
-	// 4XNN: Skip next instruction if reg!=00NN
-	if ((VX) != (opcode & 0xFF))
-		vm->pc += 4;
-	else
-		vm->pc += 2;
+	// 4XNN: Skip next instruction if Vx!=00NN
+	vm->pc += (VX == (opcode & 0xFF)) ? 2 : 4;
 	return;
 reg_eq_reg:
 	// 5XY0: Skip next instruction if Vx==Vy
-	if (VX == VY)
-		vm->pc += 4;
-	else
-		vm->pc += 2;
+	vm->pc += (VX == VY) ? 4 : 2;
 	return;
 load_halfword:
 	// 6XNN: Set Vx to 00NN.
@@ -217,10 +209,7 @@ math:
 	return;
 reg_neq_reg:
 	// 9XY0: Skip if Vx!=Vy
-	if (VX != VY)
-		vm->pc += 4;
-	else
-		vm->pc += 2;
+	vm->pc += (VX != VY) ? 4 : 2;
 	return;
 set_idx:
 	// ANNN
@@ -244,17 +233,11 @@ exxx_keyops:
 	switch (opcode & 0x00FF) {
 	case 0x9E:
 		// EX9E: Skip next instruction if key stored in Vx pressed
-		if (vm->keyboard[(VX)])
-			vm->pc += 4;
-		else
-			vm->pc += 2;
+		vm->pc += vm->keyboard[(VX)] ? 4 : 2;
 		return;
 	case 0xA1:
 		// EX9E: Skip next instruction if key stored in Vx NOT pressed
-		if (!(vm->keyboard[(VX)]))
-			vm->pc += 4;
-		else
-			vm->pc += 2;
+		vm->pc += vm->keyboard[(VX)] ? 2 : 4;
 		return;
 	default:
 		DIE("Unknown opcode Exxx");
