@@ -4,6 +4,7 @@
 #define _BSD_SOURCE
 #include <SDL.h>
 #include <SDL_video.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
@@ -16,11 +17,11 @@
 #define SCREEN_WIDTH 0x40 * RENDER_SCALE
 #define SCREEN_HEIGHT 0x20 * RENDER_SCALE
 
-long difftime_ns(const struct timespec *then, const struct timespec *now);
-void draw_screen(const chip8_vm *vm);
-void main_loop(chip8_vm *vm);
-void sdl_init(void);
-void update_vm_keyboard(chip8_vm *vm);
+static long difftime_ns(const struct timespec *then, const struct timespec *now);
+static void draw_screen(const chip8_vm *vm);
+static int main_loop(chip8_vm *vm);
+static void sdl_init(void);
+static void update_vm_keyboard(chip8_vm *vm);
 
 static SDL_Window *win = NULL;
 static SDL_Renderer *renderer = NULL;
@@ -35,14 +36,14 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 	sdl_init();
-	chip8_vm vm = init_chip8();
-	load_rom(argv[1], &vm);
-	main_loop(&vm);
+	chip8_vm *vm = init_chip8();
+	load_rom(argv[1], vm);
+	int status = main_loop(vm);
 	SDL_DestroyWindow(win);
-	exit(EXIT_SUCCESS);
+	exit(status);
 }
 
-void main_loop(chip8_vm *vm)
+static int main_loop(chip8_vm *vm)
 {
 	SDL_Event event;
 	struct timespec frame_start;
@@ -58,7 +59,7 @@ void main_loop(chip8_vm *vm)
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			case SDL_QUIT:
-				return;
+				return 0;
 			case SDL_KEYDOWN:
 				if (event.key.keysym.scancode == PAUSE_KEY) {
 					ops_since_draw = 0;
@@ -76,7 +77,11 @@ void main_loop(chip8_vm *vm)
 			usleep(250000); // quarter-second
 			continue;
 		}
-		vm_cycle(vm, key_pressed);
+		if (unlikely(vm_cycle(vm, key_pressed))) {
+            fputs(chip8_get_error(), stderr);
+            fputc('\n', stderr);
+            return 1;
+        }
 		key_pressed = false;
 
 		if (ops_since_draw++ == OPS_PER_FRAME) {
@@ -94,14 +99,14 @@ void main_loop(chip8_vm *vm)
 	}
 }
 
-inline long difftime_ns(const struct timespec *then, const struct timespec *now)
+static inline long difftime_ns(const struct timespec *then, const struct timespec *now)
 {
 	const long one_sec = 1000000000;
 	long nsec_diff = now->tv_nsec - then->tv_nsec;
 	return nsec_diff > 0 ? nsec_diff : nsec_diff + one_sec;
 }
 
-void draw_screen(const chip8_vm *vm)
+static void draw_screen(const chip8_vm *vm)
 {
 	static const SDL_Rect dest = {
 		.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT
@@ -117,7 +122,7 @@ void draw_screen(const chip8_vm *vm)
 	SDL_RenderPresent(renderer);
 }
 
-void sdl_init(void)
+static void sdl_init(void)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
 		DIE("Could not initialize SDL");
@@ -138,7 +143,7 @@ void sdl_init(void)
 	SDL_RenderPresent(renderer);
 }
 
-void update_vm_keyboard(chip8_vm *vm)
+static void update_vm_keyboard(chip8_vm *vm)
 {
 	static const SDL_Scancode keys[] = {
 		CHIP8_KEY_0, CHIP8_KEY_1, CHIP8_KEY_2, CHIP8_KEY_3,
