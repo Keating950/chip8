@@ -16,7 +16,7 @@ endif
 
 PROF ?= 0
 ifeq ($(PROF), 1)
-	CFLAGS += -g -pg
+	CFLAGS += -g
 endif
 
 SDL2=$(shell pkg-config --cflags --libs sdl2)
