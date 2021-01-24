@@ -27,7 +27,7 @@ const uint8_t font_set[] = {
 	0xF0, 0x80, 0x80, 0x80, 0xF0, // C
 	0xE0, 0x90, 0x90, 0x90, 0xE0, // D
 	0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-	0xF0, 0x80, 0xF0, 0x80, 0x80 // F
+	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 };
 
 chip8_vm init_chip8()
@@ -49,10 +49,8 @@ void load_rom(const char *path, chip8_vm *vm)
 		DIE("Failed to open file");
 	fseek(f, 0, SEEK_END);
 	rom_size = ftell(f);
-	if (rom_size > 0x800) {
-		fputs("Rom is too large\n", stderr);
-		exit(EXIT_FAILURE);
-	}
+	if (rom_size > 0x800)
+        DIE("Rom is too large");
 	rewind(f);
 	bytes_read = fread((vm->mem + 0x200), sizeof(uint8_t), rom_size, f);
 	fclose(f);
@@ -294,7 +292,7 @@ fxxx_ops:
 	case 0x55:
 		// FX55: Register dump. Stores V0 through VX in memory,
 		// starting at idx
-		for (size_t i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
+		for (unsigned i = 0; i <= VX; i++) {
 			vm->mem[(vm->idx) + i] = vm->v[i];
 		}
 		vm->pc += 2;
@@ -302,7 +300,7 @@ fxxx_ops:
 	case 0x65:
 		// FX55: Register load. Loads V0 through VX from memory,
 		// starting from idx
-		for (size_t i = 0; i <= ((opcode & 0x0F00u) >> 8u); i++) {
+		for (unsigned i = 0; i <= VX; i++) {
 			vm->v[i] = vm->mem[(vm->idx) + i];
 		}
 		vm->pc += 2;
