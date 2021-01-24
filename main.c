@@ -30,8 +30,8 @@ int main(int argc, char **argv)
 {
 	if (argc < 2) {
 		fputs("Wrong number of arguments.\n"
-		      "Usage:\n\tchip8 [path to rom]\n",
-		      stderr);
+			  "Usage:\n\tchip8 [path to rom]\n",
+			  stderr);
 		exit(EXIT_FAILURE);
 	}
 	sdl_init();
@@ -85,9 +85,7 @@ void main_loop(chip8_vm *vm)
 			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
-			delta = ZERO_FLOOR((TIMER_HZ_NS -
-					    difftime_ns(&frame_start, &frame_end))) /
-				1000;
+			delta = ZERO_FLOOR((TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end))) / 1000;
 			if (delta)
 				usleep(delta);
 		}
@@ -103,15 +101,11 @@ inline long difftime_ns(const struct timespec *then, const struct timespec *now)
 
 void draw_screen(const chip8_vm *vm)
 {
-	static const SDL_Rect dest = {
-		.x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT
+	const SDL_Rect dest = { .x = 0, .y = 0, .w = SCREEN_WIDTH, .h = SCREEN_HEIGHT };
+	const SDL_Rect src = {
+		.x = 0, .y = 0, .w = SCREEN_WIDTH / RENDER_SCALE, .h = SCREEN_HEIGHT / RENDER_SCALE
 	};
-	static const SDL_Rect src = { .x = 0,
-				      .y = 0,
-				      .w = SCREEN_WIDTH / RENDER_SCALE,
-				      .h = SCREEN_HEIGHT / RENDER_SCALE };
-	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen,
-			      0x40 * sizeof(uint32_t)))
+	if (SDL_UpdateTexture(vm_texture, &src, (void *)vm->screen, 0x40 * sizeof(uint32_t)))
 		DIE(SDL_GetError());
 	SDL_RenderCopy(renderer, vm_texture, &src, &dest);
 	SDL_RenderPresent(renderer);
@@ -121,29 +115,23 @@ void sdl_init(void)
 {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
 		DIE("Could not initialize SDL");
-	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN, &win,
-				    &renderer);
+	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN, &win, &renderer);
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, 0);
 	if (!(win) || !(renderer))
 		DIE(SDL_GetError());
 	vm_texture = SDL_CreateTexture(renderer, SDL_GetWindowPixelFormat(win),
-				       SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH,
-				       SCREEN_HEIGHT);
-	if (!vm_texture)
-		DIE(SDL_GetError());
-	if (SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF))
-		DIE(SDL_GetError());
-	if (SDL_RenderClear(renderer))
+								   SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
+	if (!vm_texture || SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF) ||
+		SDL_RenderClear(renderer))
 		DIE(SDL_GetError());
 	SDL_RenderPresent(renderer);
 }
 
 void update_vm_keyboard(chip8_vm *vm)
 {
-	static const SDL_Scancode keys[] = {
-		CHIP8_KEY_0, CHIP8_KEY_1, CHIP8_KEY_2, CHIP8_KEY_3,
-		CHIP8_KEY_4, CHIP8_KEY_5, CHIP8_KEY_6, CHIP8_KEY_7,
-		CHIP8_KEY_8, CHIP8_KEY_9, CHIP8_KEY_A, CHIP8_KEY_B,
+	const SDL_Scancode keys[] = {
+		CHIP8_KEY_0, CHIP8_KEY_1, CHIP8_KEY_2, CHIP8_KEY_3, CHIP8_KEY_4, CHIP8_KEY_5,
+		CHIP8_KEY_6, CHIP8_KEY_7, CHIP8_KEY_8, CHIP8_KEY_9, CHIP8_KEY_A, CHIP8_KEY_B,
 		CHIP8_KEY_C, CHIP8_KEY_D, CHIP8_KEY_E, CHIP8_KEY_F,
 	};
 	const uint8_t *kbd_state = SDL_GetKeyboardState(NULL);

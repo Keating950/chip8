@@ -5,11 +5,11 @@
 #include "chip8.h"
 #include "util.h"
 
-#define COLS 	(0x40)
-#define ROWS 	(0x20)
-#define VX 		(vm->v[(opcode & 0x0F00) >> 8])
-#define VY 		(vm->v[(opcode & 0x00F0) >> 4])
-#define likely(x)       __builtin_expect((x),1)
+#define COLS (0x40)
+#define ROWS (0x20)
+#define VX (vm->v[(opcode & 0x0F00) >> 8])
+#define VY (vm->v[(opcode & 0x00F0) >> 4])
+#define likely(x) __builtin_expect((x), 1)
 
 const uint8_t font_set[] = {
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -50,7 +50,7 @@ void load_rom(const char *path, chip8_vm *vm)
 	fseek(f, 0, SEEK_END);
 	rom_size = ftell(f);
 	if (rom_size > 0x800)
-        DIE("Rom is too large");
+		DIE("Rom is too large");
 	rewind(f);
 	bytes_read = fread((vm->mem + 0x200), sizeof(uint8_t), rom_size, f);
 	fclose(f);
@@ -89,10 +89,10 @@ static void draw_sprite(chip8_vm *vm, uint16_t opcode)
 void vm_cycle(chip8_vm *vm, bool key_pressed)
 {
 	static const void *opcode_handles[] = {
-		&&zero_ops,   &&jump,	     &&jump_and_link, &&reg_eq_im,
-		&&reg_neq_im, &&reg_eq_reg,  &&load_halfword, &&add_halfword,
-		&&math,	      &&reg_neq_reg, &&set_idx,	      &&jump_idx_plus_reg,
-		&&random_and, &&draw,	     &&exxx_keyops,   &&fxxx_ops,
+		&&zero_ops,	  &&jump,		 &&jump_and_link, &&reg_eq_im,
+		&&reg_neq_im, &&reg_eq_reg,	 &&load_halfword, &&add_halfword,
+		&&math,		  &&reg_neq_reg, &&set_idx,		  &&jump_idx_plus_reg,
+		&&random_and, &&draw,		 &&exxx_keyops,	  &&fxxx_ops,
 	};
 	const uint16_t opcode = vm->mem[vm->pc] << 8 | vm->mem[vm->pc + 1];
 	if (likely(((opcode & 0xF000u) >> 12) < LEN(opcode_handles)))

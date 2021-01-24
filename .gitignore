@@ -13,6 +13,7 @@ tags
 chip8
 cmake-build-debug
 debug.c
+perf.data*
 
 # Created by .ignore support plugin (hsz.mobi)
 ### C++ template
