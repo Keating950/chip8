@@ -1,4 +1,5 @@
 .gdb_history
+.cache
 .idea
 build
 .clangd

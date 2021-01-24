@@ -31,4 +31,4 @@ chip8.o: chip8.c chip8.h util.h
 	$(CC) -c $(CFLAGS) chip8.c chip8.h util.h
 
 clean:
-	rm -f chip8 *.o *.gch
+	rm -f *.o *.gch
