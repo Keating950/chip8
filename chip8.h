@@ -11,8 +11,7 @@ typedef struct {
 	uint16_t stack[0x10];
 	uint8_t sp;
 	uint32_t screen[0x40 * 0x20];
-	int delay_timer;
-	int sound_timer; // both 60hz
+	int delay_timer; // 60hz
 	int keyboard[0x10];
 } chip8_vm;
 

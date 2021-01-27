@@ -82,7 +82,6 @@ void main_loop(chip8_vm *vm)
 		if (ops_since_draw++ == OPS_PER_FRAME) {
 			ops_since_draw = 0;
 			vm->delay_timer = ZERO_FLOOR(vm->delay_timer - 1);
-			vm->sound_timer = ZERO_FLOOR(vm->sound_timer - 1);
 			draw_screen(vm);
 			clock_gettime(CLOCK_MONOTONIC, &frame_end);
 			delta = ZERO_FLOOR((TIMER_HZ_NS - difftime_ns(&frame_start, &frame_end))) / 1000;
@@ -113,7 +112,7 @@ void draw_screen(const chip8_vm *vm)
 
 void sdl_init(void)
 {
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS))
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_AUDIO))
 		DIE("Could not initialize SDL");
 	SDL_CreateWindowAndRenderer(SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN, &win, &renderer);
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, 0);
@@ -125,6 +124,20 @@ void sdl_init(void)
 		SDL_RenderClear(renderer))
 		DIE(SDL_GetError());
 	SDL_RenderPresent(renderer);
+
+	// initialize audio
+
+    // opening an audio device:
+    SDL_AudioSpec audio_spec;
+    SDL_zero(audio_spec);
+    audio_spec.freq = 44100;
+    audio_spec.format = AUDIO_S16SYS;
+    audio_spec.channels = 1;
+    audio_spec.samples = 1024;
+    audio_spec.callback = NULL;
+    SDL_AudioDeviceID device = SDL_OpenAudioDevice(NULL, 0, &audio_spec, NULL, 0);
+
+
 }
 
 void update_vm_keyboard(chip8_vm *vm)

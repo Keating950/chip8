@@ -268,7 +268,7 @@ fxxx_ops:
 		break;
 	case 0x18:
 		// FX18: Set sound timer to the value of Vx
-		vm->sound_timer = VX;
+        // Implemented as nop
 		vm->pc += 2;
 		break;
 	case 0x1E:
